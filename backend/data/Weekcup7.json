@@ -1,0 +1,9 @@
+{
+  "characters" : ["CHU", "SIS", "TOM", "LES", "RAP", "LOK", "JT", "DRA", "RH", "SIN",
+                  "ODA", "RED", "MM", "WS", "ALI", "GW", "GER", "HEN", "IM", "PAN",
+                  "GHR", "CD", "BUL", "WYA", "MK", "ALC", "LEO", "ANN", "PHI", "ROS",
+                  "TIT", "DON", "SAT", "GEN", "BW", "SHR"],
+  "boards" : ["Sarpedon", "Kaer Morhen", "Sanctum Sanctorum", "Azuchi", "Solomon's mine", "Heorot"],
+  "spreadsheet_id" : "1rGE4mqbKu73AckpmH8OZeB9A6X1X85-LGc0VrVothFg",
+  "log_sheet" : "WeekcupMajor3.7"
+}

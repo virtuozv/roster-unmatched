@@ -1,0 +1,9 @@
+{
+  "characters" : ["TRX", "BEO", "HEN", "BIG", "MED", "LOK", "BM", "MK", "WYA", "CIR", "ROS", "YEN",
+                  "SPD", "WS", "DON", "STR", "ERE", "ING", "GW", "MM", "CHU", "TOM", "TES", "SAT",
+                  "BW", "JT", "LCG", "SHA", "BB", "PHI"],
+  "boards" : ["Sarpedon", "Helicarrier", "Sherwood", "Azuchi castle", "Novigrad", "Venice",
+              "Globe Theatre", "Alamo", "Kaer Morhen", "Raptor Paddock", "Santa Workshop", "Point Pleasant"],
+  "spreadsheet_id" : "11S2J_6O5EwogC0DSDjDskqZf9fIyc9IOGljDN3_FJy0",
+  "log_sheet" : "Log LC"
+}
