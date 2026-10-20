@@ -95,9 +95,23 @@
             </select>
           </label>
         </div>
+        <div class="action-row">
+          <label class="size">
+            Штраф ниже
+            <input id="weightBelow" type="number" min="0" max="20" step="0.5" value="1">
+          </label>
+          <label class="size">
+            Штраф выше
+            <input id="weightAbove" type="number" min="0" max="20" step="0.5" value="1">
+          </label>
+          <label class="size">
+            Штраф нет
+            <input id="weightNone" type="number" min="0" max="20" step="0.5" value="0">
+          </label>
+        </div>
         <div class="action-row roll-row">
           <span id="rollHome"></span>
-          <button id="idealRoll" class="danger" type="button">Выше 90%</button>
+          <button id="idealRoll" class="danger" type="button">SCORE 0</button>
         </div>
       </div>
     </div>
@@ -207,16 +221,30 @@
             </select>
           </label>
         </div>
+        <div class="action-row">
+          <label class="size">
+            Штраф ниже
+            <input id="buildWeightBelow" type="number" min="0" max="20" step="0.5" value="1">
+          </label>
+          <label class="size">
+            Штраф выше
+            <input id="buildWeightAbove" type="number" min="0" max="20" step="0.5" value="1">
+          </label>
+          <label class="size">
+            Штраф нет
+            <input id="buildWeightNone" type="number" min="0" max="20" step="0.5" value="0">
+          </label>
+        </div>
         <div class="action-row roll-row">
           <button id="buildRoll" class="primary" type="button">Собрать ростер</button>
-          <button id="buildIdealRoll" class="danger" type="button">Выше 90%</button>
+          <button id="buildIdealRoll" class="danger" type="button">SCORE 0</button>
         </div>
       </div>
     </div>
   </header>
 
   <section id="gate" class="gate" hidden>
-    <p>Сначала отсекаются герои, которые чаще всего были в недавних ростерах, и те, кто слишком силён по всем турнирам. Из оставшихся собирается пул 20, и уже из него — ростер 15. Без галочки сильные в пул не входят. «Пар сильных» добавляет указанное число пар: в каждой двое компенсируют друг друга. «Слабых» не пускает героев слабее 40%, тех, у кого нет игр, а также Баффи, Ангела, Виллоу, Спайка и Белку. «Исключить турниры» не пускает героев выбранных турниров. «Несыгранные партии» оставляет в ростере только пары, где герои уже играли друг с другом. «Последний набор» в «Не брать» убирает Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу, а в «В ростере» обязательно ставит их. Красная кнопка ищет ростер с идеалом выше 90%. Masters ставит колоду из 30: процент общий по этой начальной расстановке, баны и пики его не пересчитывают.</p>
+    <p>Сначала отсекаются герои, которые чаще всего были в недавних ростерах, и те, кто слишком силён по всем турнирам. Из оставшихся собирается пул 20, и уже из него — ростер 15. Без галочки сильные в пул не входят. «Пар сильных» добавляет указанное число пар: в каждой двое компенсируют друг друга. «Слабых» не пускает героев слабее 40%, тех, у кого нет игр, а также Баффи, Ангела, Виллоу, Спайка и Белку. «Исключить турниры» не пускает героев выбранных турниров. «Несыгранные партии» оставляет в ростере только пары, где герои уже играли друг с другом. «Последний набор» в «Не брать» убирает Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу, а в «В ростере» обязательно ставит их. SCORE — сумма штрафов за пары ниже и выше коридора (и опционально за отсутствие данных); 0 — идеал. Красная кнопка ищет ростер со SCORE 0. Masters ставит колоду из 30: SCORE по этой начальной расстановке, баны и пики его не пересчитывают.</p>
     <div id="heroGateSlot" class="gate-slot">
       <button id="roll" class="primary" type="button">Собрать ростер</button>
     </div>
@@ -230,7 +258,7 @@
       <div class="shift-rows">
         <div>
           <div class="raise-row">
-            <button id="heroRaise" class="primary" type="button">Поднять процент</button>
+            <button id="heroRaise" class="primary" type="button">Снизить SCORE</button>
             <button id="heroRaiseHide" class="hide-offers" type="button" hidden>Скрыть</button>
             <label class="check raise-skip">
               <input id="heroRaiseSkip" type="checkbox">
@@ -241,7 +269,7 @@
         </div>
         <div>
           <div class="raise-row">
-            <button id="heroLower" type="button">Убавить процент</button>
+            <button id="heroLower" type="button">Поднять SCORE</button>
             <button id="heroLowerHide" class="hide-offers" type="button" hidden>Скрыть</button>
             <label class="check raise-skip">
               <input id="heroLowerSkip" type="checkbox">
@@ -311,11 +339,11 @@
   <main id="buildBoard">
     <section id="buildIdeal" class="ideal">
       <p id="buildIdealValue" class="ideal-value">—</p>
-      <p id="buildIdealNote" class="ideal-note">Выбери хотя бы двух героев. Процент появится по известным парам.</p>
+      <p id="buildIdealNote" class="ideal-note">Выбери хотя бы двух героев. SCORE появится по парам внутри коридора и вне него.</p>
       <div class="shift-rows">
         <div>
           <div class="raise-row">
-            <button id="offerSwaps" class="primary" type="button" disabled>Поднять процент</button>
+            <button id="offerSwaps" class="primary" type="button" disabled>Снизить SCORE</button>
             <button id="offerHide" class="hide-offers" type="button" hidden>Скрыть</button>
             <label class="check raise-skip">
               <input id="skipRecentSwaps" type="checkbox">
@@ -326,7 +354,7 @@
         </div>
         <div>
           <div class="raise-row">
-            <button id="offerLower" type="button" disabled>Убавить процент</button>
+            <button id="offerLower" type="button" disabled>Поднять SCORE</button>
             <button id="offerLowerHide" class="hide-offers" type="button" hidden>Скрыть</button>
             <label class="check raise-skip">
               <input id="skipRecentLower" type="checkbox">

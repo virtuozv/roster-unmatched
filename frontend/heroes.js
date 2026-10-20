@@ -69,6 +69,9 @@ export function currentSettings() {
     size: rosterSize(),
     bandLow: bandValue("bandLow", 45),
     bandHigh: bandValue("bandHigh", 55),
+    weightBelow: weightValue("weightBelow", 1),
+    weightAbove: weightValue("weightAbove", 1),
+    weightNone: weightValue("weightNone", 0),
     strongPairs: strongPairCount(),
     dropWeak: document.getElementById("dropWeak").checked,
     dropEvents: selectedEvents(),
@@ -178,6 +181,13 @@ export function startHeroes() {
       offerHeroSwaps("down");
     }
   });
+  for (const id of ["bandLow", "bandHigh", "weightBelow", "weightAbove", "weightNone"]) {
+    document.getElementById(id).addEventListener("input", () => {
+      if (lastPayload) {
+        refreshShownRoster();
+      }
+    });
+  }
   document.getElementById("latestSet").addEventListener("change", () => {
     if (document.getElementById("latestSet").checked) {
       document.getElementById("dropLatest").checked = false;
@@ -282,8 +292,8 @@ function paintHeroSwaps(box, swaps, direction) {
     const line = document.createElement("p");
     line.className = "ideal-note";
     line.textContent = direction === "down"
-      ? "Замен, которые убавляют общий процент, нет."
-      : "Замен, которые поднимают общий процент, нет.";
+      ? "Замен, которые поднимают SCORE, нет."
+      : "Замен, которые снижают SCORE, нет.";
     box.append(line);
     return;
   }
@@ -296,8 +306,8 @@ function paintHeroSwaps(box, swaps, direction) {
     const gain = document.createElement("span");
     gain.className = "gain";
     const value = Number(swap.gain);
-    gain.textContent = (value < 0 ? "−" : "+") + Math.abs(value).toFixed(1).replace(".", ",") + "%";
-    gain.classList.toggle("is-down", value < 0);
+    gain.textContent = (value < 0 ? "−" : "+") + Math.abs(value).toFixed(1).replace(".", ",");
+    gain.classList.toggle("is-down", value > 0);
     button.append(text, portrait(swap.addImage, swap.add), gain);
     button.addEventListener("click", () => applyHeroOffer(swap, direction));
     box.append(button);
@@ -376,6 +386,14 @@ function bandValue(id, fallback) {
   return Math.min(100, Math.max(0, value));
 }
 
+function weightValue(id, fallback) {
+  const value = Number(document.getElementById(id).value);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(20, Math.max(0, value));
+}
+
 function strongPairCount() {
   if (!strongPairsOn.checked) {
     return 0;
@@ -429,7 +447,7 @@ function showRoster(payload) {
 function paintScored(payload) {
   showIdeal(payload.summary || {});
   if (heroBanned.size) {
-    idealNote.textContent += " Забаненные герои в процент не входят.";
+    idealNote.textContent += " Забаненные герои в SCORE не входят.";
   }
   showNuances(payload.nuances || []);
   showProblems(payload.problems || [], payload.summary || {});
@@ -501,7 +519,7 @@ async function rescoreActive() {
     rosterView = null;
     ideal.hidden = false;
     idealValue.textContent = "—";
-    idealNote.textContent = "В расчёте меньше двух героев: бан не входит в процент.";
+    idealNote.textContent = "В расчёте меньше двух героев: бан не входит в SCORE.";
     nuances.replaceChildren();
     const line = document.createElement("p");
     line.className = "ideal-note";
@@ -537,15 +555,17 @@ async function rescoreActive() {
 function showIdeal(summary) {
   ideal.hidden = false;
   const value = typeof summary.ideal === "number" ? summary.ideal : 0;
-  idealValue.textContent = value.toFixed(1).replace(".", ",") + "%";
+  idealValue.textContent = formatScore(value);
   const known = summary.knownPairs || 0;
   const floor = gameFloor(summary.minGames);
   const games = floor + " " + countWord(floor, "игра", "игры", "игр");
+  const buckets = bucketLine(summary);
+  const weights = weightLine(summary);
+  let text = "SCORE = штрафы за пары вне коридора. " + buckets + ". " + weights + ". Считается по парам от " + games + ". 0 — все известные пары в коридоре.";
   if (summary.draft === "Masters") {
-    idealNote.textContent = "Общий процент начальной расстановки из " + known + " пар, где есть хотя бы " + games + ". Баны и пики Masters его не меняют. 100% — каждая такая пара ровно равная.";
-    return;
+    text = "SCORE начальной расстановки. " + buckets + ". " + weights + ". Баны и пики Masters его не меняют. Известных пар: " + known + ".";
   }
-  idealNote.textContent = "Насколько матчапы внутри ростера близки к 50%. Считается по " + known + " парам, где есть хотя бы " + games + ". 100% — каждая такая пара ровно равная.";
+  idealNote.textContent = text;
 }
 
 function showNuances(groups, root) {
@@ -619,8 +639,7 @@ function showProblems(items, summary, list, note) {
     caption.textContent = "Внутри ростера нет пар вне коридора " + low + "–" + high + "%.";
     return;
   }
-  caption.textContent = "Пары этого ростера, где процент побед ниже " + low + "% или выше " + high + "%. Ниже — насколько пара тянет общий процент вниз.";
-  const known = Number(summary.knownPairs) || 0;
+  caption.textContent = "Пары этого ростера, где процент побед ниже " + low + "% или выше " + high + "%. Ниже — штраф пары в общий SCORE.";
   for (const item of items) {
     const row = document.createElement("li");
     row.append(portrait(item.heroImage, item.hero));
@@ -633,7 +652,7 @@ function showProblems(items, summary, list, note) {
     line.textContent = item.hero + " против " + item.opponent + ", " + item.games + " " + countWord(item.games, "матч", "матча", "матчей");
     const pull = document.createElement("p");
     pull.className = "line";
-    pull.textContent = pullText(item.gap, known);
+    pull.textContent = pullText(item);
     text.append(pct, line, pull);
     row.append(text);
     row.append(portrait(item.opponentImage, item.opponent));
@@ -671,11 +690,11 @@ function nameItem(hero, reason, hoverSource, strength) {
   }
   if (hoverSource && rosterView) {
     const stats = pairStats(hero.name, null);
-    if (stats.problems > 0) {
+    if (stats.below + stats.above > 0) {
       const mark = document.createElement("span");
       mark.className = "mark";
-      mark.textContent = "вне " + stats.problems;
-      mark.title = "Пары этого героя внутри ростера, которые выходят за коридор";
+      mark.textContent = "↓" + stats.below + " ↑" + stats.above;
+      mark.title = "Пары этого героя: ниже / выше коридора";
       shot.append(mark);
     }
   }
@@ -732,21 +751,15 @@ function summaryEdge(name) {
   const stats = pairStats(name, null);
   const edge = document.createElement("p");
   edge.className = "edge summary";
-  if (stats.problems > 0) {
+  if (stats.below + stats.above > 0) {
     edge.classList.add("down");
   } else if (stats.slots > 0 && stats.known >= Math.ceil(stats.slots * 0.35)) {
     edge.classList.add("up");
   } else {
     edge.classList.add("mid");
   }
-  edge.append(noteLine(String(stats.problems), "count"));
-  edge.append(noteLine("вне коридора"));
-  if (stats.pairs === null) {
-    edge.append(noteLine("пар от " + rosterView.minGames + " игр нет"));
-  } else {
-    edge.append(noteLine("его пары " + formatPairs(stats.pairs)));
-  }
-  edge.append(noteLine("известно " + stats.known + " из " + stats.slots));
+  edge.append(noteLine("↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above, "count buckets"));
+  edge.append(noteLine("нет инфы " + stats.none));
   return edge;
 }
 
@@ -760,7 +773,6 @@ function matchupEdge(info) {
   }
   edge.textContent = Math.round(info.pct) + "%";
   const reliable = info.games >= rosterView.minGames;
-  const outside = info.pct < rosterView.low || info.pct > rosterView.high;
   if (info.pct > rosterView.line) {
     edge.classList.add("up");
   } else if (info.pct < rosterView.line) {
@@ -774,8 +786,12 @@ function matchupEdge(info) {
   edge.append(noteLine(info.games + " " + countWord(info.games, "матч", "матча", "матчей")));
   if (!reliable) {
     edge.append(noteLine("мало игр", "games tag"));
-  } else if (outside) {
-    edge.append(noteLine("вне коридора", "games tag"));
+  } else if (info.pct < rosterView.low) {
+    edge.append(noteLine("ниже коридора", "games tag"));
+  } else if (info.pct > rosterView.high) {
+    edge.append(noteLine("выше коридора", "games tag"));
+  } else {
+    edge.append(noteLine("в коридоре", "games tag"));
   }
   return edge;
 }
@@ -783,9 +799,10 @@ function matchupEdge(info) {
 function pairStats(name, skip) {
   const order = rosterView.order;
   const row = rosterView.duels[name] || [];
-  let problems = 0;
-  let known = 0;
-  let closeness = 0;
+  let below = 0;
+  let inside = 0;
+  let above = 0;
+  let none = 0;
   let slots = 0;
   order.forEach((opponent, index) => {
     if (opponent === name || opponent === skip) {
@@ -794,19 +811,25 @@ function pairStats(name, skip) {
     slots += 1;
     const info = row[index];
     if (!info || info.games < rosterView.minGames) {
+      none += 1;
       return;
     }
-    known += 1;
-    closeness += Math.max(0, 100 - Math.abs(info.pct - 50) * 2);
-    if (info.pct < rosterView.low || info.pct > rosterView.high) {
-      problems += 1;
+    if (info.pct < rosterView.low) {
+      below += 1;
+    } else if (info.pct > rosterView.high) {
+      above += 1;
+    } else {
+      inside += 1;
     }
   });
   return {
-    problems,
-    known,
+    below,
+    inside,
+    above,
+    none,
+    known: below + inside + above,
     slots,
-    pairs: known ? closeness / known : null,
+    problems: below + above,
   };
 }
 
@@ -814,22 +837,36 @@ function spareText(stats) {
   if (!stats.known) {
     return "вместо него: нет пар от " + rosterView.minGames + " игр";
   }
-  return "вместо него " + formatPairs(stats.pairs) + " · вне " + stats.problems + "/" + stats.known;
+  return "вместо него ↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above + " · нет " + stats.none;
 }
 
-function pullText(gap, known) {
-  if (!known) {
-    return "";
+function pullText(item) {
+  const weight = Number(item.weight);
+  const side = item.side === "below" ? "ниже" : "выше";
+  if (!Number.isFinite(weight)) {
+    return side + " коридора";
   }
-  const pull = (2 * Number(gap)) / known;
-  if (pull < 0.05) {
-    return "меньше 0,1 к проценту";
-  }
-  return "−" + pull.toFixed(1).replace(".", ",") + " к проценту";
+  return "штраф " + formatScore(weight) + " (" + side + ")";
 }
 
-function formatPairs(value) {
-  return value.toFixed(1).replace(".", ",") + "%";
+function formatScore(value) {
+  return Number(value).toFixed(1).replace(".", ",");
+}
+
+function bucketLine(summary) {
+  return "↓" + (summary.below || 0)
+    + " · в " + (summary.inside || 0)
+    + " · ↑" + (summary.above || 0)
+    + " · нет " + (summary.none || 0);
+}
+
+function weightLine(summary) {
+  return "веса: ниже "
+    + formatScore(summary.weightBelow ?? 1)
+    + ", выше "
+    + formatScore(summary.weightAbove ?? 1)
+    + ", нет "
+    + formatScore(summary.weightNone ?? 0);
 }
 
 function gameFloor(value) {

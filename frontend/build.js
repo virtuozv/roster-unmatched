@@ -7,6 +7,9 @@ import { openChoose } from "./picker.js";
 const sizeInput = document.getElementById("buildSize");
 const bandLowInput = document.getElementById("buildBandLow");
 const bandHighInput = document.getElementById("buildBandHigh");
+const weightBelowInput = document.getElementById("buildWeightBelow");
+const weightAboveInput = document.getElementById("buildWeightAbove");
+const weightNoneInput = document.getElementById("buildWeightNone");
 const draftSelect = document.getElementById("buildDraft");
 const dropWeak = document.getElementById("buildDropWeak");
 const dropUnknown = document.getElementById("buildDropUnknown");
@@ -67,6 +70,9 @@ export function startBuild() {
   });
   bandLowInput.addEventListener("input", score);
   bandHighInput.addEventListener("input", score);
+  weightBelowInput.addEventListener("input", score);
+  weightAboveInput.addEventListener("input", score);
+  weightNoneInput.addEventListener("input", score);
   draftSelect.addEventListener("change", () => {
     sizeInput.value = draftSelect.value === "Masters" ? "30" : "15";
     const next = readSize();
@@ -284,6 +290,9 @@ function draftSettings() {
     size: readSize() || 15,
     bandLow: bandValue(bandLowInput, 45),
     bandHigh: bandValue(bandHighInput, 55),
+    weightBelow: weightValue(weightBelowInput, 1),
+    weightAbove: weightValue(weightAboveInput, 1),
+    weightNone: weightValue(weightNoneInput, 0),
     strongPairs: strongPairsOn.checked ? strongPairCount() : 0,
     dropWeak: dropWeak.checked,
     dropEvents: selectedEvents(),
@@ -396,6 +405,9 @@ function buildSettings() {
     source: statsSource(),
     bandLow: bandValue(bandLowInput, 45),
     bandHigh: bandValue(bandHighInput, 55),
+    weightBelow: weightValue(weightBelowInput, 1),
+    weightAbove: weightValue(weightAboveInput, 1),
+    weightNone: weightValue(weightNoneInput, 0),
     dropWeak: dropWeak.checked,
     dropEvents: selectedEvents(),
     dropUnknown: dropUnknown.checked,
@@ -475,8 +487,8 @@ function paintSwaps(swaps, direction) {
     const line = document.createElement("p");
     line.className = "ideal-note";
     line.textContent = down
-      ? "Замен, которые убавляют общий процент, нет."
-      : "Замен, которые поднимают общий процент, нет.";
+      ? "Замен, которые поднимают SCORE, нет."
+      : "Замен, которые снижают SCORE, нет.";
     box.append(line);
     return;
   }
@@ -489,8 +501,8 @@ function paintSwaps(swaps, direction) {
     const gain = document.createElement("span");
     gain.className = "gain";
     const value = Number(swap.gain);
-    gain.textContent = (value < 0 ? "−" : "+") + Math.abs(value).toFixed(1).replace(".", ",") + "%";
-    gain.classList.toggle("is-down", value < 0);
+    gain.textContent = (value < 0 ? "−" : "+") + Math.abs(value).toFixed(1).replace(".", ",");
+    gain.classList.toggle("is-down", value > 0);
     button.append(text, portrait(swap.addImage, swap.add), gain);
     button.addEventListener("click", () => applyOffer(swap, direction));
     box.append(button);
@@ -657,8 +669,8 @@ function score() {
     marks = new Map();
     idealValue.textContent = "—";
     const waiting = slots.filter(Boolean).length >= 2
-      ? "В расчёте меньше двух героев: бан не входит в процент."
-      : "Выбери хотя бы двух героев. Процент появится по известным парам.";
+      ? "В расчёте меньше двух героев: бан не входит в SCORE."
+      : "Выбери хотя бы двух героев. SCORE появится по парам внутри коридора и вне него.";
     idealNote.textContent = waiting + (pairNote ? " " + pairNote : "");
     clearReport();
     render();
@@ -673,6 +685,9 @@ function score() {
       source: statsSource(),
       bandLow: bandValue(bandLowInput, 45),
       bandHigh: bandValue(bandHighInput, 55),
+      weightBelow: weightValue(weightBelowInput, 1),
+      weightAbove: weightValue(weightAboveInput, 1),
+      weightNone: weightValue(weightNoneInput, 0),
     }),
   })
     .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
@@ -698,12 +713,17 @@ function score() {
       };
       marks = rankMarks(payload.heroes || [], payload.matrix || [], buildView.minGames);
       const value = typeof summary.ideal === "number" ? summary.ideal : 0;
-      idealValue.textContent = value.toFixed(1).replace(".", ",") + "%";
-      const known = summary.knownPairs || 0;
+      idealValue.textContent = formatScore(value);
       const games = buildView.minGames + " " + countWord(buildView.minGames, "игра", "игры", "игр");
-      let text = "Насколько матчапы внутри ростера близки к 50%. Считается по " + known + " парам, где есть хотя бы " + games + ". 100% — каждая такая пара ровно равная.";
+      let text = "SCORE = штрафы за пары вне коридора. "
+        + bucketLine(summary)
+        + ". "
+        + weightLine(summary)
+        + ". Считается по парам от "
+        + games
+        + ". 0 — все известные пары в коридоре.";
       if (banned.size) {
-        text += " Забаненные герои в процент не входят.";
+        text += " Забаненные герои в SCORE не входят.";
       }
       if (pairNote) {
         text += " " + pairNote;
@@ -767,21 +787,15 @@ function summaryEdge(name) {
   const stats = pairStats(name);
   const edge = document.createElement("p");
   edge.className = "edge summary";
-  if (stats.problems > 0) {
+  if (stats.below + stats.above > 0) {
     edge.classList.add("down");
   } else if (stats.slots > 0 && stats.known >= Math.ceil(stats.slots * 0.35)) {
     edge.classList.add("up");
   } else {
     edge.classList.add("mid");
   }
-  edge.append(noteLine(String(stats.problems), "count"));
-  edge.append(noteLine("вне коридора"));
-  if (stats.pairs === null) {
-    edge.append(noteLine("пар от " + buildView.minGames + " игр нет"));
-  } else {
-    edge.append(noteLine("его пары " + formatPairs(stats.pairs)));
-  }
-  edge.append(noteLine("известно " + stats.known + " из " + stats.slots));
+  edge.append(noteLine("↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above, "count buckets"));
+  edge.append(noteLine("нет инфы " + stats.none));
   return edge;
 }
 
@@ -795,7 +809,6 @@ function matchupEdge(info) {
   }
   edge.textContent = Math.round(info.pct) + "%";
   const reliable = info.games >= buildView.minGames;
-  const outside = info.pct < buildView.low || info.pct > buildView.high;
   if (info.pct > buildView.line) {
     edge.classList.add("up");
   } else if (info.pct < buildView.line) {
@@ -809,16 +822,21 @@ function matchupEdge(info) {
   edge.append(noteLine(info.games + " " + countWord(info.games, "матч", "матча", "матчей")));
   if (!reliable) {
     edge.append(noteLine("мало игр", "games tag"));
-  } else if (outside) {
-    edge.append(noteLine("вне коридора", "games tag"));
+  } else if (info.pct < buildView.low) {
+    edge.append(noteLine("ниже коридора", "games tag"));
+  } else if (info.pct > buildView.high) {
+    edge.append(noteLine("выше коридора", "games tag"));
+  } else {
+    edge.append(noteLine("в коридоре", "games tag"));
   }
   return edge;
 }
 
 function pairStats(name) {
-  let problems = 0;
-  let known = 0;
-  let closeness = 0;
+  let below = 0;
+  let inside = 0;
+  let above = 0;
+  let none = 0;
   let slots = 0;
   const row = buildView.duels[name] || [];
   buildView.order.forEach((opponent, index) => {
@@ -828,24 +846,46 @@ function pairStats(name) {
     slots += 1;
     const info = row[index];
     if (!info || info.games < buildView.minGames) {
+      none += 1;
       return;
     }
-    known += 1;
-    closeness += Math.max(0, 100 - Math.abs(info.pct - 50) * 2);
-    if (info.pct < buildView.low || info.pct > buildView.high) {
-      problems += 1;
+    if (info.pct < buildView.low) {
+      below += 1;
+    } else if (info.pct > buildView.high) {
+      above += 1;
+    } else {
+      inside += 1;
     }
   });
   return {
-    problems,
-    known,
+    below,
+    inside,
+    above,
+    none,
+    known: below + inside + above,
     slots,
-    pairs: known ? closeness / known : null,
+    problems: below + above,
   };
 }
 
-function formatPairs(value) {
-  return value.toFixed(1).replace(".", ",") + "%";
+function formatScore(value) {
+  return Number(value).toFixed(1).replace(".", ",");
+}
+
+function bucketLine(summary) {
+  return "↓" + (summary.below || 0)
+    + " · в " + (summary.inside || 0)
+    + " · ↑" + (summary.above || 0)
+    + " · нет " + (summary.none || 0);
+}
+
+function weightLine(summary) {
+  return "веса: ниже "
+    + formatScore(summary.weightBelow ?? 1)
+    + ", выше "
+    + formatScore(summary.weightAbove ?? 1)
+    + ", нет "
+    + formatScore(summary.weightNone ?? 0);
 }
 
 function gameFloor(value) {
@@ -862,6 +902,14 @@ function bandValue(input, fallback) {
     return fallback;
   }
   return Math.min(100, Math.max(0, value));
+}
+
+function weightValue(input, fallback) {
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(20, Math.max(0, value));
 }
 
 function strongPairCount() {

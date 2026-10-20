@@ -34,8 +34,49 @@ def known_pairs(data, roster, settings):
                 continue
             deviation = abs(info["pct"] - 50)
             in_band = in_win_band(info["pct"], settings)
-            pairs.append((hero, opponent, info, deviation, in_band))
+            if info["pct"] < settings["bandLow"]:
+                side = "below"
+            elif info["pct"] > settings["bandHigh"]:
+                side = "above"
+            else:
+                side = "inside"
+            pairs.append((hero, opponent, info, deviation, in_band, side))
     return pairs
+
+
+def pair_buckets(data, roster, settings):
+    below = 0
+    inside = 0
+    above = 0
+    none = 0
+    for index, hero in enumerate(roster):
+        for opponent in roster[index + 1:]:
+            info = cell(data, hero, opponent)
+            if not info or info["games"] < settings["minGames"]:
+                none += 1
+                continue
+            if info["pct"] < settings["bandLow"]:
+                below += 1
+            elif info["pct"] > settings["bandHigh"]:
+                above += 1
+            else:
+                inside += 1
+    return {
+        "below": below,
+        "inside": inside,
+        "above": above,
+        "none": none,
+        "known": below + inside + above,
+    }
+
+
+def roster_score(data, names, settings):
+    buckets = pair_buckets(data, names, settings)
+    return (
+        buckets["below"] * settings["weightBelow"]
+        + buckets["above"] * settings["weightAbove"]
+        + buckets["none"] * settings["weightNone"]
+    ), buckets
 
 
 def hero_by_name_map(data):
@@ -46,23 +87,29 @@ def hero_by_name_map(data):
 
 
 def addition_score(data, roster, candidate, settings, hero_by_name):
-    deviations = []
-    outside = 0
+    below = 0
+    above = 0
+    none = 0
+    known = 0
     for name in roster:
         info = cell(data, candidate, name)
         if not info or info["games"] < settings["minGames"]:
+            none += 1
             continue
-        deviations.append(abs(info["pct"] - 50))
-        if not in_win_band(info["pct"], settings):
-            outside += 1
-    if not deviations:
-        balance = 22
-    else:
-        balance = sum(deviations) / len(deviations)
-        if len(deviations) < max(1, len(roster) * 0.35):
-            balance += 6
-        if settings["band"]:
-            balance += 5 * outside / len(deviations)
+        known += 1
+        if info["pct"] < settings["bandLow"]:
+            below += 1
+        elif info["pct"] > settings["bandHigh"]:
+            above += 1
+    balance = (
+        below * settings["weightBelow"]
+        + above * settings["weightAbove"]
+        + none * settings["weightNone"]
+    )
+    if not known:
+        balance += 22
+    elif known < max(1, len(roster) * 0.35) and settings["weightNone"] <= 0:
+        balance += 6
     balance += penalty_points(hero_by_name[candidate], settings, data)
     return balance
 

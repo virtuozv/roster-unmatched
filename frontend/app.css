@@ -795,14 +795,20 @@ button.danger:disabled { opacity: 0.5; cursor: wait; }
   font-weight: 500;
 }
 
-.edge.up { background: rgba(44, 106, 73, 0.72); }
-.edge.down { background: rgba(141, 61, 54, 0.72); }
+.edge.up { background: rgba(141, 61, 54, 0.72); }
+.edge.down { background: rgba(44, 106, 73, 0.72); }
 .edge.mid, .edge.none { background: rgba(18, 17, 15, 0.55); }
-.edge.thin.up { background: rgba(44, 106, 73, 0.38); }
-.edge.thin.down { background: rgba(141, 61, 54, 0.38); }
+.edge.thin.up { background: rgba(141, 61, 54, 0.38); }
+.edge.thin.down { background: rgba(44, 106, 73, 0.38); }
 .edge .count {
   font-size: 40px;
   line-height: 0.9;
+}
+.edge.summary .count.buckets {
+  font-size: 18px;
+  line-height: 1.15;
+  font-family: "Segoe UI", sans-serif;
+  font-weight: 650;
 }
 .edge .tag { font-weight: 650; }
 
@@ -846,10 +852,11 @@ button.danger:disabled { opacity: 0.5; cursor: wait; }
   background: rgba(141, 61, 54, 0.92);
   color: #fff8f4;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
-  padding: 3px 8px;
+  padding: 3px 7px;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .menu {

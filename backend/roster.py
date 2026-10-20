@@ -5,6 +5,7 @@ from balance import (
     known_pairs,
     oriented_match,
     pair_rank,
+    roster_score,
     weight_of,
 )
 from constants import LATEST_SET, POOL_SIZE, SIZE, STRONG_GAMES, STRONG_RATE, WEAK_NAMES, WEAK_RATE, drop_events_from
@@ -64,6 +65,9 @@ def settings_from(payload):
         "bandHigh": band_high,
         "band": bool(payload.get("band", True)),
         "minGames": max(1, int(number("minGames", 5))),
+        "weightBelow": min(20, max(0, number("weightBelow", 1))),
+        "weightAbove": min(20, max(0, number("weightAbove", 1))),
+        "weightNone": min(20, max(0, number("weightNone", 0))),
         "penaltyRecent": min(2, max(0, number("penaltyRecent", 1))),
         "penaltyOften": min(2, max(0, number("penaltyOften", 0.7))),
         "penaltyStrong": min(2, max(0, number("penaltyStrong", 0.8))),
@@ -436,13 +440,8 @@ def roll(data, settings, rng):
 
 
 def roster_ideal(data, names, settings):
-    pairs = known_pairs(data, names, settings)
-    if not pairs:
-        return 0.0
-    total = 0.0
-    for item in pairs:
-        total += max(0.0, 100 - item[3] * 2)
-    return total / len(pairs)
+    score, _buckets = roster_score(data, names, settings)
+    return score
 
 
 def climb_free(data, settings, rng, free_pool, locked, steps):
@@ -460,7 +459,7 @@ def climb_free(data, settings, rng, free_pool, locked, steps):
     taken = set(current)
     value = roster_ideal(data, locked + current, settings)
     for _ in range(steps):
-        if round(value, 1) > 90:
+        if round(value, 1) <= 0:
             break
         index = rng.randrange(need)
         add = free_pool[rng.randrange(len(free_pool))]
@@ -474,7 +473,7 @@ def climb_free(data, settings, rng, free_pool, locked, steps):
         taken.remove(previous)
         taken.add(add)
         trial = roster_ideal(data, locked + current, settings)
-        if trial >= value:
+        if trial <= value:
             value = trial
         else:
             current[index] = previous
@@ -489,7 +488,7 @@ def roll_above(data, settings, rng):
     locked = list(ready["paired_names"])
     free_pool = [hero["name"] for hero in ready["kept"]]
     best_free = None
-    best_value = -1.0
+    best_value = None
     for restart in range(4):
         if ready["regular_roster"] <= 0:
             found = []
@@ -517,7 +516,7 @@ def roll_above(data, settings, rng):
             value = roster_ideal(data, locked + current, settings)
             need = len(current)
             for _ in range(700):
-                if round(value, 1) > 90:
+                if round(value, 1) <= 0:
                     break
                 index = rng.randrange(need)
                 add = free_pool[rng.randrange(len(free_pool))]
@@ -531,7 +530,7 @@ def roll_above(data, settings, rng):
                 taken.remove(previous)
                 taken.add(add)
                 trial = roster_ideal(data, locked + current, settings)
-                if trial >= value:
+                if trial <= value:
                     value = trial
                 else:
                     current[index] = previous
@@ -540,14 +539,14 @@ def roll_above(data, settings, rng):
             found = current
         else:
             found, value = climb_free(data, settings, rng, free_pool, locked, 700)
-        if value > best_value:
+        if best_value is None or value < best_value:
             best_free = found
             best_value = value
-        if round(best_value, 1) > 90:
+        if round(best_value, 1) <= 0:
             break
     if best_free is None:
-        raise ValueError("При этих настройках ростер выше 90% не нашёлся")
-    reached = round(best_value, 1) > 90
+        raise ValueError("При этих настройках ростер со SCORE 0 не нашёлся")
+    reached = round(best_value, 1) <= 0
     roster = list(best_free) + locked
     extras_needed = ready["pool_size"] - len(roster)
     remaining = [hero for hero in ready["kept"] if hero["name"] not in best_free]
@@ -567,11 +566,11 @@ def roll_above(data, settings, rng):
     if settings["strongPairs"] and not ready["pairs"]:
         note += " Пар сильных не нашлось."
     if settings.get("draft") == "Masters":
-        note += " Процент — общий по начальной расстановке, до банов и пиков."
+        note += " SCORE — по начальной расстановке, до банов и пиков."
     if reached:
-        note += " Идеал выше 90%."
+        note += " SCORE 0."
     else:
-        note += " Выше 90% не нашлось, показан лучший из найденных."
+        note += " SCORE 0 не нашёлся, показан лучший из найденных."
     excluded = cut_records(hero_by_name, ready["frequent"], ready["strong"], ready["weak"], ready["recent"], ready.get("droppedLatest"))
     roster, pool_names = apply_latest(roster, pool_names, settings, hero_by_name, ready["paired_names"])
     return finish(data, roster, settings, [note], "roll", pool_names, excluded, ready["pair_reasons"])
@@ -654,13 +653,13 @@ def suggest_swaps(data, names, settings, limit=8):
             gain = round(value - base, 1)
             downward = settings.get("direction") == "down"
             if downward:
-                if gain >= 0:
-                    continue
-                better = top is None or gain < top["gain"] or (gain == top["gain"] and add < top["add"])
-            else:
                 if gain <= 0:
                     continue
                 better = top is None or gain > top["gain"] or (gain == top["gain"] and add < top["add"])
+            else:
+                if gain >= 0:
+                    continue
+                better = top is None or gain < top["gain"] or (gain == top["gain"] and add < top["add"])
             if better:
                 top = {
                     "remove": remove,
@@ -673,9 +672,9 @@ def suggest_swaps(data, names, settings, limit=8):
         if top:
             best.append(top)
     if settings.get("direction") == "down":
-        best.sort(key=lambda item: (item["gain"], item["remove"], item["add"]))
-    else:
         best.sort(key=lambda item: (-item["gain"], item["remove"], item["add"]))
+    else:
+        best.sort(key=lambda item: (item["gain"], item["remove"], item["add"]))
     return best[:limit]
 
 
@@ -765,15 +764,13 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
     pair_reasons = pair_reasons or {}
     roster = sorted(roster, key=lambda name: name)
     pairs = known_pairs(data, roster, settings)
-    if pairs:
-        closeness = [max(0.0, 100 - item[3] * 2) for item in pairs]
-        ideal = round(sum(closeness) / len(closeness), 1)
-    else:
-        ideal = 0
+    ideal, buckets = roster_score(data, roster, settings)
+    ideal = round(ideal, 1)
     problems = []
-    for hero_name, opponent_name, info, deviation, in_band in pairs:
+    for hero_name, opponent_name, info, deviation, in_band, side in pairs:
         if in_band:
             continue
+        weight = settings["weightBelow"] if side == "below" else settings["weightAbove"]
         problems.append({
             "hero": hero_by_name[hero_name]["name"],
             "heroImage": hero_by_name[hero_name].get("image", ""),
@@ -784,6 +781,8 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
             "losses": info["losses"],
             "games": info["games"],
             "gap": round(deviation, 1),
+            "side": side,
+            "weight": weight,
         })
     problems.sort(key=lambda item: item["gap"], reverse=True)
     heroes = []
@@ -864,11 +863,18 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
         "matrix": matrix,
         "duels": duels,
         "summary": {
-            "knownPairs": len(pairs),
+            "knownPairs": buckets["known"],
             "ideal": ideal,
+            "below": buckets["below"],
+            "inside": buckets["inside"],
+            "above": buckets["above"],
+            "none": buckets["none"],
             "bandLow": settings["bandLow"],
             "bandHigh": settings["bandHigh"],
             "minGames": settings["minGames"],
+            "weightBelow": settings["weightBelow"],
+            "weightAbove": settings["weightAbove"],
+            "weightNone": settings["weightNone"],
             "draft": settings.get("draft") or "",
         },
         "problems": problems,

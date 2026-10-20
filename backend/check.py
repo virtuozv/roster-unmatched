@@ -68,8 +68,8 @@ def check():
     if not set(hero["name"] for hero in wide["heroes"]).issubset(hero["name"] for hero in wide["pool"]):
         raise SystemExit("Ростер из 20 вышел за пул")
     ideal = result["summary"]["ideal"]
-    if not isinstance(ideal, (int, float)) or ideal < 0 or ideal > 100:
-        raise SystemExit("Идеальность должна быть процентом")
+    if not isinstance(ideal, (int, float)) or ideal < 0:
+        raise SystemExit("SCORE ростера должен быть числом от нуля")
     if any(45 <= item["pct"] <= 55 for item in result["problems"]):
         raise SystemExit("В проблемные места попала ровная пара")
     wide_band = roll(data, settings_from({"bandLow": 40, "bandHigh": 60}), random.Random(2))
@@ -98,7 +98,7 @@ def check():
     if names[0] in swapped_names or outside not in swapped_names:
         raise SystemExit("Замена не применилась")
     if not isinstance(swapped["summary"]["ideal"], (int, float)):
-        raise SystemExit("После замены нет процента ростера")
+        raise SystemExit("После замены нет SCORE ростера")
     if outside not in {item["name"] for item in swapped["catalog"]}:
         raise SystemExit("В списке замены нет героев")
     without_weak = roll(data, settings_from({"dropWeak": True}), random.Random(9))
@@ -128,16 +128,26 @@ def check():
     high = roll_above(data, settings, random.Random(5))
     high_names = {hero["name"] for hero in high["heroes"]}
     if len(high_names) != 15 or not isinstance(high["summary"]["ideal"], (int, float)):
-        raise SystemExit("Ростер выше 90% не собрался")
+        raise SystemExit("Ростер со SCORE около 0 не собрался")
     if not high_names <= {hero["name"] for hero in high["pool"]}:
-        raise SystemExit("Ростер выше 90% вышел за пул")
+        raise SystemExit("Ростер со SCORE около 0 вышел за пул")
     if high_names & banned:
-        raise SystemExit("В ростер выше 90% попал исключённый герой")
+        raise SystemExit("В ростер со SCORE около 0 попал исключённый герой")
     built = score_roster(data, ["Сунь Укун", "Ахиллес", "Сунь Укун", "нет такого"], settings)
-    expect = round(max(0.0, 100 - abs(info["pct"] - 50) * 2), 1)
     built_names = [hero["name"] for hero in built["heroes"]]
-    if built_names != ["Ахиллес", "Сунь Укун"] or built["summary"]["knownPairs"] != 1 or built["summary"]["ideal"] != expect:
-        raise SystemExit("Конструктор считает идеал не так, как ростер")
+    if built_names != ["Ахиллес", "Сунь Укун"] or built["summary"]["knownPairs"] != 1:
+        raise SystemExit("Конструктор считает состав не так, как ростер")
+    expect = roster_ideal(data, ["Ахиллес", "Сунь Укун"], settings)
+    if built["summary"]["ideal"] != round(expect, 1):
+        raise SystemExit("Конструктор считает SCORE не так, как ростер")
+    if info["pct"] < settings["bandLow"]:
+        side_expect = settings["weightBelow"]
+    elif info["pct"] > settings["bandHigh"]:
+        side_expect = settings["weightAbove"]
+    else:
+        side_expect = 0
+    if round(expect, 1) != round(side_expect, 1):
+        raise SystemExit("SCORE пары Сунь Укун — Ахиллес посчитан неверно")
     catalog = hero_catalog(data)
     if len(catalog) < len(data["heroes"]):
         raise SystemExit("В конструкторе не хватает героев")
@@ -180,7 +190,7 @@ def check():
     masters_names = [hero["name"] for hero in masters["heroes"]]
     masters_expect = round(roster_ideal(data, masters_names, masters_settings), 1)
     if len(masters_names) != 30 or masters["summary"].get("draft") != "Masters" or masters["summary"]["ideal"] != masters_expect:
-        raise SystemExit("Masters должен считать общий процент начальной тридцатки")
+        raise SystemExit("Masters должен считать SCORE начальной тридцатки")
     check_maps()
     check_nuances(data)
     print("ok", ideal, len(result["problems"]), result["summary"]["knownPairs"])
@@ -194,11 +204,11 @@ def check_swaps(data):
         raise SystemExit("Для слабого состава не нашлось замены")
     base = roster_ideal(data, names, settings)
     for swap in swaps:
-        if swap["gain"] <= 0 or swap["remove"] not in names or swap["add"] in names:
-            raise SystemExit("Замена не поднимает процент")
+        if swap["gain"] >= 0 or swap["remove"] not in names or swap["add"] in names:
+            raise SystemExit("Замена не снижает SCORE")
         trial = [name for name in names if name != swap["remove"]] + [swap["add"]]
-        if round(roster_ideal(data, trial, settings), 1) != swap["ideal"] or swap["ideal"] <= round(base, 1):
-            raise SystemExit("Процент после замены посчитан неверно")
+        if round(roster_ideal(data, trial, settings), 1) != swap["ideal"] or swap["ideal"] >= round(base, 1):
+            raise SystemExit("SCORE после замены посчитан неверно")
     locked = suggest_swaps(data, names + ["Хеллбой"], settings_from({"latestSet": True}))
     if any(swap["remove"] == "Хеллбой" for swap in locked):
         raise SystemExit("Последний набор предложили заменить")
@@ -207,8 +217,8 @@ def check_swaps(data):
     if any(swap["add"] in recent for swap in quiet):
         raise SystemExit("Замена взяла героя из последних турниров")
     lowered = suggest_swaps(data, names, settings_from({"direction": "down"}))
-    if not lowered or any(swap["gain"] >= 0 or swap["ideal"] >= round(base, 1) for swap in lowered):
-        raise SystemExit("Замена не убавляет процент")
+    if not lowered or any(swap["gain"] <= 0 or swap["ideal"] <= round(base, 1) for swap in lowered):
+        raise SystemExit("Замена не поднимает SCORE")
 
 
 def check_saved(data):
