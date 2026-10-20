@@ -1,4 +1,5 @@
 import { selectedEvents } from "./events.js";
+import { getLang, onLangChange, t } from "./i18n.js";
 import { closeMenu, closePicker, openMenu, replaceTarget } from "./picker.js";
 import { state } from "./state.js";
 import { applyTab } from "./tabs.js";
@@ -46,7 +47,7 @@ export function mapSettings() {
     overlap = 3;
   }
   overlap = Math.min(size, Math.max(0, overlap));
-  return { size, overlap, dropEvents: selectedEvents() };
+  return { size, overlap, dropEvents: selectedEvents(), lang: getLang() };
 }
 
 export function startMaps() {
@@ -62,7 +63,7 @@ export function startMaps() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.error || "Не удалось собрать ростер");
+        throw new Error(payload.error || t("errRoll"));
       }
       showMapRoster(payload);
     } catch (err) {
@@ -70,9 +71,19 @@ export function startMaps() {
       error.textContent = err.message;
     } finally {
       mapRollButton.disabled = false;
-      mapRollButton.textContent = state.mapReady ? "Другой ростер" : "Собрать ростер";
+      paintMapRollLabel();
     }
   });
+  onLangChange(() => {
+    paintMapRollLabel();
+  });
+}
+
+function paintMapRollLabel() {
+  if (mapRollButton.disabled) {
+    return;
+  }
+  mapRollButton.textContent = state.mapReady ? t("anotherRoster") : t("roll");
 }
 
 export async function replaceMap(name) {
@@ -97,7 +108,7 @@ export async function replaceMap(name) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось заменить карту");
+      throw new Error(payload.error || t("errReplaceMap"));
     }
     showMapRoster(payload);
   } catch (err) {
@@ -126,8 +137,8 @@ function showMapRoster(payload) {
     const line = document.createElement("p");
     line.className = "local";
     line.textContent = selectedEvents().length
-      ? "Все карты исключённых турниров уже в наборе."
-      : "Турниры не исключены.";
+      ? t("mapsAllIn")
+      : t("mapsNoneExcluded");
     empty.append(line);
     mapExcluded.append(empty);
   }

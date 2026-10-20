@@ -4,6 +4,7 @@ import os
 from urllib.parse import quote
 
 from constants import DATA_DIR, MAP_IMAGE_DIR, MAP_OVERLAP, MAP_SIZE, MAPS_PATH, RECENT_FILES, drop_events_from
+from reasons import is_en
 
 
 def load_maps():
@@ -76,7 +77,12 @@ def map_settings_from(payload, map_count):
     except (TypeError, ValueError):
         overlap = MAP_OVERLAP
     size = min(map_count, max(2, size))
-    return {"size": size, "overlap": min(size, max(0, overlap)), "dropEvents": drop_events_from(payload)}
+    return {
+        "size": size,
+        "overlap": min(size, max(0, overlap)),
+        "dropEvents": drop_events_from(payload),
+        "lang": "en" if is_en(payload.get("lang")) else "ru",
+    }
 
 
 def map_avoided(item, events):
@@ -113,11 +119,15 @@ def roll_maps(data, settings, rng):
                 break
     fresh_count = size - sum(1 for name in picked if name in {item["name"] for item in recent})
     repeated_count = len(picked) - fresh_count
+    lang = settings.get("lang") or "ru"
     if events:
-        note = (
-            str(repeated_count) + " карт из " + " и ".join(events) + ", "
-            + str(fresh_count) + " там не было."
-        )
+        joined = (" and " if is_en(lang) else " и ").join(events)
+        if is_en(lang):
+            note = str(repeated_count) + " maps from " + joined + ", " + str(fresh_count) + " were not there."
+        else:
+            note = str(repeated_count) + " карт из " + joined + ", " + str(fresh_count) + " там не было."
+    elif is_en(lang):
+        note = "No events excluded. Set of " + str(len(picked)) + " maps."
     else:
         note = "Турниры не исключены. Набор из " + str(len(picked)) + " карт."
     return finish_maps(data, picked, settings, note)
@@ -128,10 +138,21 @@ def swap_maps(data, settings, roster, remove, add):
     if remove not in roster or add in roster or add not in names:
         raise ValueError("Такая замена недоступна")
     roster = [add if name == remove else name for name in roster]
-    return finish_maps(data, roster, settings, add + " входит вместо " + remove + ".")
+    lang = settings.get("lang") or "ru"
+    if is_en(lang):
+        note = add + " comes in for " + remove + "."
+    else:
+        note = add + " входит вместо " + remove + "."
+    return finish_maps(data, roster, settings, note)
 
 
-def recent_reason(labels):
+def recent_reason(labels, lang="ru"):
+    if is_en(lang):
+        if not labels:
+            return "not in Last Chance 2026, First Chance 2026, or Weekcup"
+        if len(labels) == 1:
+            return "was in " + labels[0]
+        return "was in " + " and ".join(labels)
     if not labels:
         return "не было в Last Chance 2026, First Chance 2026 и Weekcup"
     if len(labels) == 1:
@@ -145,6 +166,11 @@ def finish_maps(data, roster, settings, note):
     chosen = set(roster)
     events = settings.get("dropEvents") or []
 
+    lang = settings.get("lang") or "ru"
+    missing_art = (
+        ", no art in maps yet" if is_en(lang) else ", картинки в maps ещё нет"
+    )
+
     def card(item):
         return {
             "name": item["name"],
@@ -152,7 +178,7 @@ def finish_maps(data, roster, settings, note):
             "games": item["games"],
             "recent": item["recent"],
             "image": item.get("image", ""),
-            "reason": recent_reason(item["recent"]) + ("" if item.get("image") else ", картинки в maps ещё нет"),
+            "reason": recent_reason(item["recent"], lang) + ("" if item.get("image") else missing_art),
         }
 
     excluded = [card(item) for item in data["maps"] if map_avoided(item, events) and item["name"] not in chosen]

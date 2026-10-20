@@ -6,6 +6,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from constants import APP_DIR, IMAGE_DIR, MAP_IMAGE_DIR
 from maps import map_settings_from, roll_maps, swap_maps
+from balance import list_unknown_heroes
 from roster import hero_catalog, rescore, roll, roll_above, score_roster, settings_from, suggest_strong_pairs, suggest_swaps, swap
 from saved import delete_roster, load_saved, store_roster
 
@@ -51,6 +52,15 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/heroes":
             source = parse_qs(parsed.query).get("source", ["all"])[0]
             self.respond(200, {"heroes": hero_catalog(self.data_for(source))})
+            return
+        if path == "/api/unknown":
+            query = parse_qs(parsed.query)
+            source = query.get("source", ["all"])[0]
+            try:
+                min_games = max(0, int(query.get("minGames", ["5"])[0]))
+            except ValueError:
+                min_games = 5
+            self.respond(200, list_unknown_heroes(self.data_for(source), {"minGames": min_games}))
             return
         if path == "/api/maps":
             self.respond(200, {

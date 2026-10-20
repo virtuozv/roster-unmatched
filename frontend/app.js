@@ -2,10 +2,13 @@ import { refreshBuildSource, startBuild } from "./build.js";
 import { bindDropEvents } from "./events.js";
 import { boardShot, hasMapRoster, mapChoices, replaceMap, startMaps } from "./maps.js";
 import { hasHeroRoster, heroChoices, portrait, refreshShownRoster, replaceHero, startHeroes } from "./heroes.js";
+import { onLangChange, startI18n } from "./i18n.js";
 import { bindReplace } from "./picker.js";
 import { state } from "./state.js";
-import { paintCounted, startTabs } from "./tabs.js";
+import { applyTab, paintCounted, startTabs } from "./tabs.js";
+import { startUnknown } from "./unknown.js";
 
+startI18n();
 bindReplace({
   heroReady: hasHeroRoster,
   mapReady: hasMapRoster,
@@ -19,7 +22,11 @@ bindReplace({
 startHeroes();
 startMaps();
 startBuild();
+startUnknown();
 startTabs();
+onLangChange(() => {
+  applyTab();
+});
 
 document.getElementById("statsSource").addEventListener("change", () => {
   state.statsSource = document.getElementById("statsSource").value;

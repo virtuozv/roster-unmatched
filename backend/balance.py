@@ -79,6 +79,115 @@ def roster_score(data, names, settings):
     ), buckets
 
 
+def is_unknown_pair(data, left, right, settings):
+    floor = max(0, int(settings["minGames"]))
+    info = cell(data, left, right)
+    if not info or info["games"] < 1:
+        return True
+    return info["games"] <= floor
+
+
+def unknown_link_count(data, roster, candidate, settings):
+    return sum(1 for name in roster if is_unknown_pair(data, candidate, name, settings))
+
+
+def roster_unknown_count(data, names, settings):
+    total = 0
+    for index, hero in enumerate(names):
+        for opponent in names[index + 1:]:
+            if is_unknown_pair(data, hero, opponent, settings):
+                total += 1
+    return total
+
+
+def list_unknown_heroes(data, settings):
+    hero_by_name = hero_by_name_map(data)
+    names = sorted(hero_by_name)
+    floor = max(0, int(settings["minGames"]))
+    result = []
+    for hero in names:
+        unknown = []
+        for opponent in names:
+            if opponent == hero:
+                continue
+            info = cell(data, hero, opponent)
+            if not info or info["games"] < 1:
+                kind = "missing"
+                games = 0
+                pct = None
+            elif info["games"] <= floor:
+                kind = "thin"
+                games = info["games"]
+                pct = info["pct"]
+            else:
+                continue
+            other = hero_by_name[opponent]
+            unknown.append({
+                "name": other["name"],
+                "nameEn": other.get("nameEn") or other["name"],
+                "image": other.get("image", ""),
+                "games": games,
+                "pct": pct,
+                "kind": kind,
+            })
+        if not unknown:
+            continue
+        unknown.sort(key=lambda row: (0 if row["kind"] == "missing" else 1, row["games"], row["name"]))
+        hero_info = hero_by_name[hero]
+        result.append({
+            "name": hero_info["name"],
+            "nameEn": hero_info.get("nameEn") or hero_info["name"],
+            "image": hero_info.get("image", ""),
+            "count": len(unknown),
+            "missing": sum(1 for row in unknown if row["kind"] == "missing"),
+            "thin": sum(1 for row in unknown if row["kind"] == "thin"),
+            "unknown": unknown,
+        })
+    result.sort(key=lambda row: (-row["count"], row["name"]))
+    return {
+        "heroes": result,
+        "minGames": floor,
+        "total": len(result),
+    }
+
+
+def unknown_pairs(data, roster, settings, hero_by_name):
+    floor = max(0, int(settings["minGames"]))
+    found = []
+    for index, hero in enumerate(roster):
+        for opponent in roster[index + 1:]:
+            info = cell(data, hero, opponent)
+            if not info or info["games"] < 1:
+                kind = "missing"
+                games = 0
+                pct = None
+                wins = 0
+                losses = 0
+            elif info["games"] <= floor:
+                kind = "thin"
+                games = info["games"]
+                pct = info["pct"]
+                wins = info["wins"]
+                losses = info["losses"]
+            else:
+                continue
+            left = hero_by_name[hero]
+            right = hero_by_name[opponent]
+            found.append({
+                "hero": left["name"],
+                "heroImage": left.get("image", ""),
+                "opponent": right["name"],
+                "opponentImage": right.get("image", ""),
+                "games": games,
+                "pct": pct,
+                "wins": wins,
+                "losses": losses,
+                "kind": kind,
+            })
+    found.sort(key=lambda row: (0 if row["kind"] == "missing" else 1, row["games"], row["hero"], row["opponent"]))
+    return found
+
+
 def hero_by_name_map(data):
     found = {hero["name"]: hero for hero in data["heroes"]}
     for hero in data.get("unplayed") or []:

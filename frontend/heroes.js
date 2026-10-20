@@ -1,6 +1,8 @@
 import { selectedEvents } from "./events.js";
 import { countWord, formatBound } from "./format.js";
 import { drawMatrix, strongestMarks, weakestMarks } from "./heat.js";
+import { getLang, onLangChange, t } from "./i18n.js";
+import { heroLabel, rememberHeroes } from "./names.js";
 import { closeMenu, closePicker, openMenu, replaceTarget } from "./picker.js";
 import { state } from "./state.js";
 import { applyTab } from "./tabs.js";
@@ -9,7 +11,6 @@ const rollButton = document.getElementById("roll");
 const idealButton = document.getElementById("idealRoll");
 const sizeInput = document.getElementById("size");
 const roster = document.getElementById("roster");
-const pool = document.getElementById("pool");
 const cuts = document.getElementById("cuts");
 const note = document.getElementById("note");
 const ideal = document.getElementById("ideal");
@@ -57,10 +58,11 @@ export function heroChoices(needle) {
 }
 
 export function portrait(src, name) {
+  const label = heroLabel(name);
   const image = document.createElement("img");
   if (src) image.src = src;
-  image.alt = name;
-  image.title = name;
+  image.alt = label;
+  image.title = label;
   return image;
 }
 
@@ -79,6 +81,7 @@ export function currentSettings() {
     dropLatest: document.getElementById("dropLatest").checked,
     latestSet: document.getElementById("latestSet").checked,
     draft: draftSelect.value,
+    lang: getLang(),
     source: document.getElementById("statsSource").value,
   };
 }
@@ -101,7 +104,7 @@ export async function refreshShownRoster() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось пересчитать ростер");
+      throw new Error(payload.error || t("errRefresh"));
     }
     showRoster(payload);
   } catch (err) {
@@ -145,7 +148,7 @@ async function applyLatestToggle() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось обновить ростер");
+      throw new Error(payload.error || t("errUpdate"));
     }
     showRoster(payload);
   } catch (err) {
@@ -166,7 +169,7 @@ export function startHeroes() {
     sizeInput.value = String(draftSize());
   });
   rollButton.addEventListener("click", () => requestRoster("/api/roll", rollButton));
-  idealButton.addEventListener("click", () => requestRoster("/api/roll/above", idealButton, "Ищем…"));
+  idealButton.addEventListener("click", () => requestRoster("/api/roll/above", idealButton, t("searching")));
   heroRaise.addEventListener("click", () => offerHeroSwaps("up"));
   heroLower.addEventListener("click", () => offerHeroSwaps("down"));
   heroRaiseHide.addEventListener("click", () => clearHeroOffers("up"));
@@ -200,6 +203,23 @@ export function startHeroes() {
       applyLatestToggle();
     }
   });
+  onLangChange(() => {
+    paintHeroRollLabel();
+    if (lastPayload) {
+      if (heroBanned.size) {
+        rescoreActive();
+      } else {
+        paintScored(lastPayload);
+      }
+    }
+  });
+}
+
+function paintHeroRollLabel() {
+  if (rollButton.disabled) {
+    return;
+  }
+  rollButton.textContent = state.heroReady ? t("anotherRoster") : t("roll");
 }
 
 function setHeroButtons(disabled) {
@@ -222,7 +242,7 @@ async function requestRoster(url, button, busyText) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось собрать ростер");
+      throw new Error(payload.error || t("errRoll"));
     }
     heroBanned = new Set();
     showRoster(payload);
@@ -232,7 +252,7 @@ async function requestRoster(url, button, busyText) {
   } finally {
     button.textContent = previous;
     setHeroButtons(false);
-    rollButton.textContent = state.heroReady ? "Другой ростер" : "Собрать ростер";
+    paintHeroRollLabel();
   }
 }
 
@@ -263,7 +283,7 @@ async function offerHeroSwaps(direction) {
       return;
     }
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось подобрать замены");
+      throw new Error(payload.error || t("errSwaps"));
     }
     paintHeroSwaps(box, payload.swaps || [], direction);
   } catch (err) {
@@ -291,9 +311,7 @@ function paintHeroSwaps(box, swaps, direction) {
   if (!swaps.length) {
     const line = document.createElement("p");
     line.className = "ideal-note";
-    line.textContent = direction === "down"
-      ? "Замен, которые поднимают SCORE, нет."
-      : "Замен, которые снижают SCORE, нет.";
+    line.textContent = direction === "down" ? t("noSwapsRaise") : t("noSwapsLower");
     box.append(line);
     return;
   }
@@ -302,7 +320,7 @@ function paintHeroSwaps(box, swaps, direction) {
     button.type = "button";
     button.append(portrait(swap.removeImage, swap.remove));
     const text = document.createElement("span");
-    text.textContent = swap.remove + " → " + swap.add;
+    text.textContent = heroLabel(swap.remove) + " → " + heroLabel(swap.add);
     const gain = document.createElement("span");
     gain.className = "gain";
     const value = Number(swap.gain);
@@ -334,7 +352,7 @@ async function applyHeroOffer(swap, direction) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось заменить героя");
+      throw new Error(payload.error || t("errReplaceHero"));
     }
     showRoster(payload);
     offerHeroSwaps(direction);
@@ -368,7 +386,7 @@ export async function replaceHero(name) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось заменить героя");
+      throw new Error(payload.error || t("errReplaceHero"));
     }
     showRoster(payload);
   } catch (err) {
@@ -418,6 +436,9 @@ function rosterSize() {
 }
 
 function showRoster(payload) {
+  rememberHeroes(payload.heroes);
+  rememberHeroes(payload.catalog);
+  rememberHeroes(payload.pool);
   closeMenu();
   closePicker();
   lastPayload = payload;
@@ -428,10 +449,6 @@ function showRoster(payload) {
   note.textContent = payload.notes && payload.notes.length ? payload.notes[0] : "";
   const present = new Set((payload.heroes || []).map((hero) => hero.name));
   heroBanned = new Set([...heroBanned].filter((name) => present.has(name)));
-  pool.replaceChildren();
-  for (const hero of payload.pool || []) {
-    pool.append(nameItem(hero, hero.reason, false));
-  }
   cuts.replaceChildren();
   for (const hero of payload.excluded || []) {
     cuts.append(nameItem(hero, hero.reason, false));
@@ -447,7 +464,7 @@ function showRoster(payload) {
 function paintScored(payload) {
   showIdeal(payload.summary || {});
   if (heroBanned.size) {
-    idealNote.textContent += " Забаненные герои в SCORE не входят.";
+    idealNote.textContent += t("bannedNotInScore");
   }
   showNuances(payload.nuances || []);
   showProblems(payload.problems || [], payload.summary || {});
@@ -519,14 +536,14 @@ async function rescoreActive() {
     rosterView = null;
     ideal.hidden = false;
     idealValue.textContent = "—";
-    idealNote.textContent = "В расчёте меньше двух героев: бан не входит в SCORE.";
+    idealNote.textContent = t("lessThanTwoBanned");
     nuances.replaceChildren();
     const line = document.createElement("p");
     line.className = "ideal-note";
-    line.textContent = "Ростер не собран.";
+    line.textContent = t("buildNuancesEmpty");
     nuances.append(line);
     problems.replaceChildren();
-    problemsNote.textContent = "Ростер не собран.";
+    problemsNote.textContent = t("buildProblemsEmpty");
     paintRosterCards(new Map());
     drawMatrix([], [], { low: 45, high: 55, minGames: 5 });
     return;
@@ -543,7 +560,7 @@ async function rescoreActive() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось пересчитать ростер");
+      throw new Error(payload.error || t("errRefresh"));
     }
     paintScored(payload);
   } catch (err) {
@@ -558,12 +575,12 @@ function showIdeal(summary) {
   idealValue.textContent = formatScore(value);
   const known = summary.knownPairs || 0;
   const floor = gameFloor(summary.minGames);
-  const games = floor + " " + countWord(floor, "игра", "игры", "игр");
+  const games = floor + " " + countWord(floor, t("gameOne"), t("gameFew"), t("gameMany"));
   const buckets = bucketLine(summary);
   const weights = weightLine(summary);
-  let text = "SCORE = штрафы за пары вне коридора. " + buckets + ". " + weights + ". Считается по парам от " + games + ". 0 — все известные пары в коридоре.";
+  let text = t("scoreExplain", { buckets, weights, games });
   if (summary.draft === "Masters") {
-    text = "SCORE начальной расстановки. " + buckets + ". " + weights + ". Баны и пики Masters его не меняют. Известных пар: " + known + ".";
+    text = t("scoreMasters", { buckets, weights, known });
   }
   idealNote.textContent = text;
 }
@@ -575,7 +592,7 @@ function showNuances(groups, root) {
   if (!filled.length) {
     const line = document.createElement("p");
     line.className = "ideal-note";
-    line.textContent = "В этом ростере нет пар с тонкой статистикой.";
+    line.textContent = t("noThinPairs");
     target.append(line);
     return;
   }
@@ -599,31 +616,40 @@ export { showNuances };
 
 function nuanceRow(item) {
   const row = document.createElement("li");
-  row.append(portrait(item.heroImage, item.hero));
+  const left = { name: item.hero, nameEn: item.nameEn };
+  const right = { name: item.opponent, nameEn: item.opponentNameEn };
+  row.append(portrait(item.heroImage, left));
   const text = document.createElement("div");
   const pct = document.createElement("p");
   pct.className = "pct";
   pct.textContent = Number(item.pct).toFixed(1).replace(".", ",") + "%";
   const line = document.createElement("p");
   line.className = "line";
-  line.textContent = item.hero + " против " + item.opponent + ", " + item.games + " " + countWord(item.games, "матч", "матча", "матчей");
+  line.textContent = t("vsLine", {
+    hero: heroLabel(left),
+    opponent: heroLabel(right),
+    games: item.games,
+    matches: countWord(item.games, t("matchOne"), t("matchFew"), t("matchMany")),
+  });
   text.append(pct, line);
   row.append(text);
-  row.append(portrait(item.opponentImage, item.opponent));
+  row.append(portrait(item.opponentImage, right));
   return row;
 }
 
 function quietRow(item) {
   const row = document.createElement("li");
   row.className = "is-quiet";
-  row.append(portrait(item.heroImage, item.hero));
+  row.append(portrait(item.heroImage, { name: item.hero, nameEn: item.nameEn }));
   const text = document.createElement("div");
   const name = document.createElement("p");
   name.className = "pct";
-  name.textContent = item.hero;
+  name.textContent = heroLabel({ name: item.hero, nameEn: item.nameEn });
   const line = document.createElement("p");
   line.className = "line";
-  line.textContent = item.games ? item.games + " " + countWord(item.games, "матч", "матча", "матчей") : "нет матчей";
+  line.textContent = item.games
+    ? item.games + " " + countWord(item.games, t("matchOne"), t("matchFew"), t("matchMany"))
+    : t("noMatches");
   text.append(name, line);
   row.append(text);
   return row;
@@ -636,26 +662,33 @@ function showProblems(items, summary, list, note) {
   const low = formatBound(summary.bandLow, 45);
   const high = formatBound(summary.bandHigh, 55);
   if (!items.length) {
-    caption.textContent = "Внутри ростера нет пар вне коридора " + low + "–" + high + "%.";
+    caption.textContent = t("noPairsOutside", { low, high });
     return;
   }
-  caption.textContent = "Пары этого ростера, где процент побед ниже " + low + "% или выше " + high + "%. Ниже — штраф пары в общий SCORE.";
+  caption.textContent = t("pairsOutside", { low, high });
   for (const item of items) {
     const row = document.createElement("li");
-    row.append(portrait(item.heroImage, item.hero));
+    const left = { name: item.hero, nameEn: item.nameEn };
+    const right = { name: item.opponent, nameEn: item.opponentNameEn };
+    row.append(portrait(item.heroImage, left));
     const text = document.createElement("div");
     const pct = document.createElement("p");
     pct.className = "pct";
     pct.textContent = item.pct.toFixed(1).replace(".", ",") + "%";
     const line = document.createElement("p");
     line.className = "line";
-    line.textContent = item.hero + " против " + item.opponent + ", " + item.games + " " + countWord(item.games, "матч", "матча", "матчей");
+    line.textContent = t("vsLine", {
+      hero: heroLabel(left),
+      opponent: heroLabel(right),
+      games: item.games,
+      matches: countWord(item.games, t("matchOne"), t("matchFew"), t("matchMany")),
+    });
     const pull = document.createElement("p");
     pull.className = "line";
     pull.textContent = pullText(item);
     text.append(pct, line, pull);
     row.append(text);
-    row.append(portrait(item.opponentImage, item.opponent));
+    row.append(portrait(item.opponentImage, right));
     box.append(row);
   }
 }
@@ -672,8 +705,12 @@ function nameItem(hero, reason, hoverSource, strength) {
     const dot = document.createElement("span");
     dot.className = strength.kind === "down" ? "strength is-weak" : "strength";
     dot.textContent = String(strength.place);
-    const role = strength.kind === "down" ? " по слабости в ростере: средний " : " по силе в ростере: средний ";
-    dot.title = strength.place + role + Math.round(strength.average) + "% против остальных, " + strength.known + " " + countWord(strength.known, "пара", "пары", "пар");
+    const role = strength.kind === "down" ? t("strengthWeak") : t("strengthStrong");
+    dot.title = strength.place + role + Math.round(strength.average)
+      + t("strengthTail", {
+        known: strength.known,
+        pairs: countWord(strength.known, t("pairOne"), t("pairFew"), t("pairMany")),
+      });
     shot.append(dot);
   }
   if (hoverSource) {
@@ -681,7 +718,7 @@ function nameItem(hero, reason, hoverSource, strength) {
     const ban = document.createElement("button");
     ban.type = "button";
     ban.className = "ban";
-    ban.textContent = banned ? "Разбан" : "Бан";
+    ban.textContent = banned ? t("unban") : t("ban");
     ban.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleBan(hero.name);
@@ -694,7 +731,7 @@ function nameItem(hero, reason, hoverSource, strength) {
       const mark = document.createElement("span");
       mark.className = "mark";
       mark.textContent = "↓" + stats.below + " ↑" + stats.above;
-      mark.title = "Пары этого героя: ниже / выше коридора";
+      mark.title = t("heroBandMark");
       shot.append(mark);
     }
   }
@@ -758,8 +795,12 @@ function summaryEdge(name) {
   } else {
     edge.classList.add("mid");
   }
-  edge.append(noteLine("↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above, "count buckets"));
-  edge.append(noteLine("нет инфы " + stats.none));
+  edge.append(noteLine(t("bucketsShort", {
+    below: stats.below,
+    inside: stats.inside,
+    above: stats.above,
+  }), "count buckets"));
+  edge.append(noteLine(t("noInfo", { n: stats.none })));
   return edge;
 }
 
@@ -783,15 +824,15 @@ function matchupEdge(info) {
   if (!reliable) {
     edge.classList.add("thin");
   }
-  edge.append(noteLine(info.games + " " + countWord(info.games, "матч", "матча", "матчей")));
+  edge.append(noteLine(info.games + " " + countWord(info.games, t("matchOne"), t("matchFew"), t("matchMany"))));
   if (!reliable) {
-    edge.append(noteLine("мало игр", "games tag"));
+    edge.append(noteLine(t("fewGames"), "games tag"));
   } else if (info.pct < rosterView.low) {
-    edge.append(noteLine("ниже коридора", "games tag"));
+    edge.append(noteLine(t("belowBand"), "games tag"));
   } else if (info.pct > rosterView.high) {
-    edge.append(noteLine("выше коридора", "games tag"));
+    edge.append(noteLine(t("aboveBand"), "games tag"));
   } else {
-    edge.append(noteLine("в коридоре", "games tag"));
+    edge.append(noteLine(t("inBand"), "games tag"));
   }
   return edge;
 }
@@ -835,18 +876,23 @@ function pairStats(name, skip) {
 
 function spareText(stats) {
   if (!stats.known) {
-    return "вместо него: нет пар от " + rosterView.minGames + " игр";
+    return t("insteadNone", { n: rosterView.minGames });
   }
-  return "вместо него ↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above + " · нет " + stats.none;
+  return t("insteadBuckets", {
+    below: stats.below,
+    inside: stats.inside,
+    above: stats.above,
+    none: stats.none,
+  });
 }
 
 function pullText(item) {
   const weight = Number(item.weight);
-  const side = item.side === "below" ? "ниже" : "выше";
+  const side = item.side === "below" ? t("sideBelow") : t("sideAbove");
   if (!Number.isFinite(weight)) {
-    return side + " коридора";
+    return t("pullSideBand", { side });
   }
-  return "штраф " + formatScore(weight) + " (" + side + ")";
+  return t("pullWeight", { weight: formatScore(weight), side });
 }
 
 function formatScore(value) {
@@ -854,19 +900,20 @@ function formatScore(value) {
 }
 
 function bucketLine(summary) {
-  return "↓" + (summary.below || 0)
-    + " · в " + (summary.inside || 0)
-    + " · ↑" + (summary.above || 0)
-    + " · нет " + (summary.none || 0);
+  return t("bucketsLine", {
+    below: summary.below || 0,
+    inside: summary.inside || 0,
+    above: summary.above || 0,
+    none: summary.none || 0,
+  });
 }
 
 function weightLine(summary) {
-  return "веса: ниже "
-    + formatScore(summary.weightBelow ?? 1)
-    + ", выше "
-    + formatScore(summary.weightAbove ?? 1)
-    + ", нет "
-    + formatScore(summary.weightNone ?? 0);
+  return t("weightsLine", {
+    below: formatScore(summary.weightBelow ?? 1),
+    above: formatScore(summary.weightAbove ?? 1),
+    none: formatScore(summary.weightNone ?? 0),
+  });
 }
 
 function gameFloor(value) {

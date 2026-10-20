@@ -2,6 +2,8 @@ import { fromDroppedEvent, selectedEvents } from "./events.js";
 import { countWord } from "./format.js";
 import { drawMatrix, strongestMarks, weakestMarks } from "./heat.js";
 import { matchesHero, portrait, showNuances, showProblems } from "./heroes.js";
+import { getLang, onLangChange, t } from "./i18n.js";
+import { heroLabel, rememberHeroes } from "./names.js";
 import { openChoose } from "./picker.js";
 
 const sizeInput = document.getElementById("buildSize");
@@ -41,7 +43,6 @@ const buildProblemsNote = document.getElementById("buildProblemsNote");
 const buildMatrix = document.getElementById("buildMatrix");
 const buildMatrixLead = document.getElementById("buildMatrixLead");
 const buildMatrixLegend = document.getElementById("buildMatrixLegend");
-const matrixLeadText = "Клетка — процент побед героя строки против героя столбца внутри ростера. Песок около 50%, зелёный выше, ржавый ниже. Номер и зелёная обводка — пять героев с лучшим средним процентом побед против остальных, пары от 5 игр. 1 — самый высокий.";
 const roster = document.getElementById("buildRoster");
 const idealValue = document.getElementById("buildIdealValue");
 const idealNote = document.getElementById("buildIdealNote");
@@ -119,7 +120,7 @@ export function startBuild() {
   resetButton.addEventListener("click", resetBoard);
   deleteButton.addEventListener("click", deleteSaved);
   rollButton.addEventListener("click", () => requestDraft("/api/roll", rollButton));
-  idealButton.addEventListener("click", () => requestDraft("/api/roll/above", idealButton, "Ищем…"));
+  idealButton.addEventListener("click", () => requestDraft("/api/roll/above", idealButton, t("searching")));
   offerButton.addEventListener("click", () => offerSwaps("up"));
   lowerButton.addEventListener("click", () => offerSwaps("down"));
   offerHide.addEventListener("click", () => clearOffers("up"));
@@ -133,6 +134,18 @@ export function startBuild() {
   });
   loadCatalog();
   loadSavedList();
+  onLangChange(() => {
+    paintBuildRollLabel();
+    render();
+    score();
+  });
+}
+
+function paintBuildRollLabel() {
+  if (rollButton.disabled) {
+    return;
+  }
+  rollButton.textContent = slots.some(Boolean) ? t("anotherRoster") : t("buildRoll");
 }
 
 function readSize() {
@@ -173,10 +186,11 @@ function loadCatalog() {
     .then((response) => response.json())
     .then((payload) => {
       catalog = payload.heroes || [];
+      rememberHeroes(catalog);
     })
     .catch(() => {
       error.hidden = false;
-      error.textContent = "Не удалось загрузить героев";
+      error.textContent = t("errLoadHeroes");
     });
   return catalogReady;
 }
@@ -191,11 +205,11 @@ function emptyNote(text) {
 }
 
 function clearReport() {
-  buildNuances.replaceChildren(emptyNote("Ростер не собран."));
+  buildNuances.replaceChildren(emptyNote(t("buildNuancesEmpty")));
   buildProblems.replaceChildren();
-  buildProblemsNote.textContent = "Ростер не собран.";
+  buildProblemsNote.textContent = t("buildProblemsEmpty");
   buildMatrix.replaceChildren();
-  buildMatrixLead.textContent = "Тепловое поле не готово, так как не собран ростер.";
+  buildMatrixLead.textContent = t("buildHeatEmpty");
   buildMatrixLegend.hidden = true;
 }
 
@@ -229,12 +243,12 @@ async function saveCurrent() {
   error.hidden = true;
   if (!title) {
     error.hidden = false;
-    error.textContent = "Нужно название ростера";
+    error.textContent = t("needSaveName");
     return;
   }
   if (!names.length) {
     error.hidden = false;
-    error.textContent = "В ростере нет героев";
+    error.textContent = t("rosterHasNoHeroes");
     return;
   }
   try {
@@ -245,7 +259,7 @@ async function saveCurrent() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось сохранить");
+      throw new Error(payload.error || t("errSave"));
     }
     savedRows = payload.rosters || [];
     await loadSavedList();
@@ -280,7 +294,7 @@ function resetBoard() {
   slots = slots.map(() => null);
   clearOffers("up");
   clearOffers("down");
-  rollButton.textContent = "Собрать ростер";
+  paintBuildRollLabel();
   render();
   score();
 }
@@ -301,6 +315,7 @@ function draftSettings() {
     latestSet: latestSet.checked,
     draft: draftSelect.value,
     source: statsSource(),
+    lang: getLang(),
   };
 }
 
@@ -325,7 +340,7 @@ async function requestDraft(url, button, busyText) {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось собрать ростер");
+      throw new Error(payload.error || t("errRoll"));
     }
     applyDraft(payload);
   } catch (err) {
@@ -334,7 +349,7 @@ async function requestDraft(url, button, busyText) {
   } finally {
     button.textContent = previous;
     setDraftButtons(false);
-    rollButton.textContent = slots.some(Boolean) ? "Другой ростер" : "Собрать ростер";
+    paintBuildRollLabel();
   }
 }
 
@@ -374,10 +389,10 @@ async function deleteSaved() {
   error.hidden = true;
   if (!title) {
     error.hidden = false;
-    error.textContent = "Сначала выбери сохранённый ростер";
+    error.textContent = t("pickSavedFirst");
     return;
   }
-  if (!window.confirm("Удалить ростер «" + title + "»? Это нельзя отменить.")) {
+  if (!window.confirm(t("confirmDelete", { name: title }))) {
     return;
   }
   try {
@@ -388,7 +403,7 @@ async function deleteSaved() {
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось удалить");
+      throw new Error(payload.error || t("errDelete"));
     }
     savedRows = payload.rosters || [];
     savedSelect.value = "";
@@ -413,6 +428,7 @@ function buildSettings() {
     dropUnknown: dropUnknown.checked,
     dropLatest: dropLatest.checked,
     latestSet: latestSet.checked,
+    lang: getLang(),
   };
 }
 
@@ -442,7 +458,7 @@ async function offerSwaps(direction) {
   error.hidden = true;
   if (names.length < 2) {
     error.hidden = false;
-    error.textContent = "Для замен нужно хотя бы два героя";
+    error.textContent = t("needTwoForSwaps");
     return;
   }
   const ticket = ++shiftTicket[direction];
@@ -462,7 +478,7 @@ async function offerSwaps(direction) {
       return;
     }
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось подобрать замены");
+      throw new Error(payload.error || t("errSwaps"));
     }
     paintSwaps(payload.swaps || [], direction);
   } catch (err) {
@@ -486,9 +502,7 @@ function paintSwaps(swaps, direction) {
   if (!swaps.length) {
     const line = document.createElement("p");
     line.className = "ideal-note";
-    line.textContent = down
-      ? "Замен, которые поднимают SCORE, нет."
-      : "Замен, которые снижают SCORE, нет.";
+    line.textContent = down ? t("noSwapsRaise") : t("noSwapsLower");
     box.append(line);
     return;
   }
@@ -497,7 +511,7 @@ function paintSwaps(swaps, direction) {
     button.type = "button";
     button.append(portrait(swap.removeImage, swap.remove));
     const text = document.createElement("span");
-    text.textContent = swap.remove + " → " + swap.add;
+    text.textContent = heroLabel(swap.remove) + " → " + heroLabel(swap.add);
     const gain = document.createElement("span");
     gain.className = "gain";
     const value = Number(swap.gain);
@@ -527,7 +541,7 @@ function render() {
     const item = document.createElement("li");
     if (!hero) {
       item.className = "is-empty";
-      item.textContent = "Выбрать";
+      item.textContent = t("choose");
     } else {
       item.dataset.buildHero = hero.name;
       const shot = document.createElement("div");
@@ -538,8 +552,12 @@ function render() {
         const dot = document.createElement("span");
         dot.className = mark.kind === "down" ? "strength is-weak" : "strength";
         dot.textContent = String(mark.place);
-        const role = mark.kind === "down" ? " по слабости в ростере: средний " : " по силе в ростере: средний ";
-        dot.title = mark.place + role + Math.round(mark.average) + "% против остальных, " + mark.known + " " + countWord(mark.known, "пара", "пары", "пар");
+        const role = mark.kind === "down" ? t("strengthWeak") : t("strengthStrong");
+        dot.title = mark.place + role + Math.round(mark.average)
+          + t("strengthTail", {
+            known: mark.known,
+            pairs: countWord(mark.known, t("pairOne"), t("pairFew"), t("pairMany")),
+          });
         shot.append(dot);
       }
       item.append(shot);
@@ -547,7 +565,7 @@ function render() {
       remove.type = "button";
       remove.className = "dismiss";
       remove.textContent = "×";
-      remove.title = "Убрать";
+      remove.title = t("remove");
       remove.addEventListener("click", (event) => {
         event.stopPropagation();
         slots[index] = null;
@@ -558,7 +576,7 @@ function render() {
       const ban = document.createElement("button");
       ban.type = "button";
       ban.className = "ban";
-      ban.textContent = banned.has(hero.name) ? "Разбан" : "Бан";
+      ban.textContent = banned.has(hero.name) ? t("unban") : t("ban");
       ban.addEventListener("click", (event) => {
         event.stopPropagation();
         if (banned.has(hero.name)) {
@@ -575,7 +593,7 @@ function render() {
       }
       const name = document.createElement("p");
       name.className = "name";
-      name.textContent = hero.name;
+      name.textContent = heroLabel(hero);
       item.append(name);
       const events = showEvents.checked ? eventLabel(hero.events) : "";
       if (events) {
@@ -627,8 +645,8 @@ function openSlot(index) {
     taken.delete(current.name);
   }
   openChoose({
-    title: current ? "Заменить " + current.name : "Выбрать героя",
-    placeholder: "Имя героя",
+    title: current ? t("replaceNamed", { name: heroLabel(current) }) : t("chooseHero"),
+    placeholder: t("searchHero"),
     choices: (needle) => catalog.filter((hero) => {
       if (taken.has(hero.name)) {
         return false;
@@ -669,8 +687,8 @@ function score() {
     marks = new Map();
     idealValue.textContent = "—";
     const waiting = slots.filter(Boolean).length >= 2
-      ? "В расчёте меньше двух героев: бан не входит в SCORE."
-      : "Выбери хотя бы двух героев. SCORE появится по парам внутри коридора и вне него.";
+      ? t("lessThanTwoBanned")
+      : t("buildIdealWait");
     idealNote.textContent = waiting + (pairNote ? " " + pairNote : "");
     clearReport();
     render();
@@ -688,6 +706,7 @@ function score() {
       weightBelow: weightValue(weightBelowInput, 1),
       weightAbove: weightValue(weightAboveInput, 1),
       weightNone: weightValue(weightNoneInput, 0),
+      lang: getLang(),
     }),
   })
     .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
@@ -696,7 +715,7 @@ function score() {
         return;
       }
       if (!ok) {
-        throw new Error(payload.error || "Не удалось посчитать ростер");
+        throw new Error(payload.error || t("errScore"));
       }
       const summary = payload.summary || {};
       const low = Number(summary.bandLow);
@@ -714,16 +733,14 @@ function score() {
       marks = rankMarks(payload.heroes || [], payload.matrix || [], buildView.minGames);
       const value = typeof summary.ideal === "number" ? summary.ideal : 0;
       idealValue.textContent = formatScore(value);
-      const games = buildView.minGames + " " + countWord(buildView.minGames, "игра", "игры", "игр");
-      let text = "SCORE = штрафы за пары вне коридора. "
-        + bucketLine(summary)
-        + ". "
-        + weightLine(summary)
-        + ". Считается по парам от "
-        + games
-        + ". 0 — все известные пары в коридоре.";
+      const games = buildView.minGames + " " + countWord(buildView.minGames, t("gameOne"), t("gameFew"), t("gameMany"));
+      let text = t("scoreExplain", {
+        buckets: bucketLine(summary),
+        weights: weightLine(summary),
+        games,
+      });
       if (banned.size) {
-        text += " Забаненные герои в SCORE не входят.";
+        text += t("bannedNotInScore");
       }
       if (pairNote) {
         text += " " + pairNote;
@@ -731,7 +748,7 @@ function score() {
       idealNote.textContent = text;
       showNuances(payload.nuances || [], buildNuances);
       showProblems(payload.problems || [], summary, buildProblems, buildProblemsNote);
-      buildMatrixLead.textContent = matrixLeadText;
+      buildMatrixLead.textContent = t("heatLead");
       buildMatrixLegend.hidden = false;
       drawMatrix(payload.heroes || [], payload.matrix || [], {
         low: buildView.low,
@@ -794,8 +811,12 @@ function summaryEdge(name) {
   } else {
     edge.classList.add("mid");
   }
-  edge.append(noteLine("↓" + stats.below + " · в " + stats.inside + " · ↑" + stats.above, "count buckets"));
-  edge.append(noteLine("нет инфы " + stats.none));
+  edge.append(noteLine(t("bucketsShort", {
+    below: stats.below,
+    inside: stats.inside,
+    above: stats.above,
+  }), "count buckets"));
+  edge.append(noteLine(t("noInfo", { n: stats.none })));
   return edge;
 }
 
@@ -819,15 +840,15 @@ function matchupEdge(info) {
   if (!reliable) {
     edge.classList.add("thin");
   }
-  edge.append(noteLine(info.games + " " + countWord(info.games, "матч", "матча", "матчей")));
+  edge.append(noteLine(info.games + " " + countWord(info.games, t("matchOne"), t("matchFew"), t("matchMany"))));
   if (!reliable) {
-    edge.append(noteLine("мало игр", "games tag"));
+    edge.append(noteLine(t("fewGames"), "games tag"));
   } else if (info.pct < buildView.low) {
-    edge.append(noteLine("ниже коридора", "games tag"));
+    edge.append(noteLine(t("belowBand"), "games tag"));
   } else if (info.pct > buildView.high) {
-    edge.append(noteLine("выше коридора", "games tag"));
+    edge.append(noteLine(t("aboveBand"), "games tag"));
   } else {
-    edge.append(noteLine("в коридоре", "games tag"));
+    edge.append(noteLine(t("inBand"), "games tag"));
   }
   return edge;
 }
@@ -873,19 +894,20 @@ function formatScore(value) {
 }
 
 function bucketLine(summary) {
-  return "↓" + (summary.below || 0)
-    + " · в " + (summary.inside || 0)
-    + " · ↑" + (summary.above || 0)
-    + " · нет " + (summary.none || 0);
+  return t("bucketsLine", {
+    below: summary.below || 0,
+    inside: summary.inside || 0,
+    above: summary.above || 0,
+    none: summary.none || 0,
+  });
 }
 
 function weightLine(summary) {
-  return "веса: ниже "
-    + formatScore(summary.weightBelow ?? 1)
-    + ", выше "
-    + formatScore(summary.weightAbove ?? 1)
-    + ", нет "
-    + formatScore(summary.weightNone ?? 0);
+  return t("weightsLine", {
+    below: formatScore(summary.weightBelow ?? 1),
+    above: formatScore(summary.weightAbove ?? 1),
+    none: formatScore(summary.weightNone ?? 0),
+  });
 }
 
 function gameFloor(value) {
@@ -1001,11 +1023,12 @@ async function placePairs() {
         dropUnknown: dropUnknown.checked,
         source: statsSource(),
         size: readSize() || 15,
+        lang: getLang(),
       }),
     });
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось подобрать пары");
+      throw new Error(payload.error || t("errPairs"));
     }
     const taken = new Set(slots.filter(Boolean).map((hero) => hero.name));
     let missed = 0;
@@ -1032,7 +1055,7 @@ async function placePairs() {
       }
     }
     if (missed) {
-      pairNote = "Часть сильных пар не вошла: на пару нужно два пустых места, и герои не должны уже быть в составе.";
+      pairNote = t("pairNotePartial");
     }
     render();
     score();

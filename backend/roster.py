@@ -6,11 +6,14 @@ from balance import (
     oriented_match,
     pair_rank,
     roster_score,
+    roster_unknown_count,
+    unknown_link_count,
+    unknown_pairs,
     weight_of,
 )
 from constants import LATEST_SET, POOL_SIZE, SIZE, STRONG_GAMES, STRONG_RATE, WEAK_NAMES, WEAK_RATE, drop_events_from
 from nuances import collect_nuances
-from reasons import cut_records, describe_pairs, format_pct, pair_reason, why_kept
+from reasons import cut_records, describe_pairs, format_pct, is_en, latest_names, pair_reason, why_kept
 
 
 def settings_from(payload):
@@ -71,6 +74,7 @@ def settings_from(payload):
         "penaltyRecent": min(2, max(0, number("penaltyRecent", 1))),
         "penaltyOften": min(2, max(0, number("penaltyOften", 0.7))),
         "penaltyStrong": min(2, max(0, number("penaltyStrong", 0.8))),
+        "lang": "en" if is_en(payload.get("lang")) else "ru",
     }
 
 
@@ -308,10 +312,13 @@ def field(data, settings):
     regular_roster = size - len(paired_names)
     if len(kept) < regular_roster:
         raise ValueError("После исключений осталось меньше " + str(size) + " героев")
+    lang = settings.get("lang") or "ru"
     pair_reasons = {}
     for left, right, info in pairs:
-        pair_reasons[left] = pair_reason(hero_by_name[left], right, info)
-        pair_reasons[right] = pair_reason(hero_by_name[right], left, oriented_match(data, right, left))
+        pair_reasons[left] = pair_reason(hero_by_name[left], right, info, lang, hero_by_name)
+        pair_reasons[right] = pair_reason(
+            hero_by_name[right], left, oriented_match(data, right, left), lang, hero_by_name
+        )
     return {
         "hero_by_name": hero_by_name,
         "size": size,
@@ -334,34 +341,74 @@ def field(data, settings):
     }
 
 
-def pool_note(ready, pool_count):
+def pool_note(ready, pool_count, lang="ru", hero_by_name=None):
     frequent = ready["frequent"]
     strong = ready["strong"]
     weak = ready["weak"]
+    en = is_en(lang)
     if ready.get("dropEvents"):
-        note = "Пул из " + str(pool_count) + " собран без героев " + " и ".join(ready["dropEvents"])
+        joined = (" and " if en else " и ").join(ready["dropEvents"])
+        note = (
+            ("Pool of " + str(pool_count) + " built without heroes from " + joined)
+            if en
+            else ("Пул из " + str(pool_count) + " собран без героев " + joined)
+        )
     else:
-        note = "Пул из " + str(pool_count) + " собран без самых частых героев недавних ростеров"
+        note = (
+            "Pool of " + str(pool_count) + " built without the most frequent recent-roster heroes"
+            if en
+            else "Пул из " + str(pool_count) + " собран без самых частых героев недавних ростеров"
+        )
     parts = []
     if frequent:
-        parts.append("убраны герои, которые были и в Chance 2026, и в Weekcup")
+        parts.append(
+            "dropped heroes who were in both Chance 2026 and Weekcup"
+            if en
+            else "убраны герои, которые были и в Chance 2026, и в Weekcup"
+        )
     if strong:
-        parts.append("убраны герои с общим процентом побед от " + str(STRONG_RATE))
+        parts.append(
+            "dropped heroes with overall win rate from " + str(STRONG_RATE)
+            if en
+            else "убраны герои с общим процентом побед от " + str(STRONG_RATE)
+        )
     if weak:
-        parts.append("убраны слабые: процент побед ниже " + str(WEAK_RATE) + ", герои без игр, Баффи, Ангел, Виллоу, Спайк и Белка")
+        parts.append(
+            "dropped weak: win rate under " + str(WEAK_RATE)
+            + ", no-games heroes, Buffy, Angel, Willow, Spike, and Squirrel Girl"
+            if en
+            else "убраны слабые: процент побед ниже " + str(WEAK_RATE)
+            + ", герои без игр, Баффи, Ангел, Виллоу, Спайк и Белка"
+        )
     if parts:
         note += ": " + ", ".join(parts) + "."
     else:
         note += "."
-    note += " Ростер из " + str(ready["size"]) + " взят только из этого пула."
+    note += (
+        " The roster of " + str(ready["size"]) + " is taken only from this pool."
+        if en
+        else " Ростер из " + str(ready["size"]) + " взят только из этого пула."
+    )
     if ready["dropUnknown"] and not settings_latest(ready):
-        note += " Пар без сыгранных матчей в ростере нет."
+        note += (
+            " No unplayed pairs remain in the roster."
+            if en
+            else " Пар без сыгранных матчей в ростере нет."
+        )
     if ready["pairs"]:
-        note += " " + describe_pairs(ready["pairs"])
+        note += " " + describe_pairs(ready["pairs"], lang, hero_by_name)
     if settings_latest(ready):
-        note += " В состав входят Хеллбой, Лиз Шерман, Эйб Сапиен и Баба Яга."
+        note += (
+            " Lineup includes " + latest_names(lang) + "."
+            if en
+            else " В состав входят " + latest_names(lang) + "."
+        )
     if ready.get("dropLatest"):
-        note += " Хеллбой, Лиз Шерман, Эйб Сапиен и Баба Яга не берутся."
+        note += (
+            " " + latest_names(lang) + " are excluded."
+            if en
+            else " " + latest_names(lang) + " не берутся."
+        )
     return note
 
 
@@ -429,12 +476,20 @@ def roll(data, settings, rng):
         roster = build_group(data, pool_heroes, ready["regular_roster"], settings, rng, hero_by_name)
         roster.extend(ready["paired_names"])
         pool_names.extend(ready["paired_names"])
-    note = pool_note(ready, len(pool_names))
+    lang = settings.get("lang") or "ru"
+    note = pool_note(ready, len(pool_names), lang, hero_by_name)
     if settings["strongPairs"] and not ready["pairs"]:
-        note += " Пар сильных не нашлось."
+        note += " No strong pairs found." if is_en(lang) else " Пар сильных не нашлось."
     if settings.get("draft") == "Masters":
-        note += " Процент — общий по начальной расстановке, до банов и пиков."
-    excluded = cut_records(hero_by_name, ready["frequent"], ready["strong"], ready["weak"], ready["recent"], ready.get("droppedLatest"))
+        note += (
+            " Rate is for the opening lineup, before bans and picks."
+            if is_en(lang)
+            else " Процент — общий по начальной расстановке, до банов и пиков."
+        )
+    excluded = cut_records(
+        hero_by_name, ready["frequent"], ready["strong"], ready["weak"],
+        ready["recent"], ready.get("droppedLatest"), lang,
+    )
     roster, pool_names = apply_latest(roster, pool_names, settings, hero_by_name, ready["paired_names"])
     return finish(data, roster, settings, [note], "roll", pool_names, excluded, ready["pair_reasons"])
 
@@ -562,18 +617,164 @@ def roll_above(data, settings, rng):
             allow_short=True,
         )
     pool_names = list(best_free) + extras + locked
-    note = pool_note(ready, len(pool_names))
+    lang = settings.get("lang") or "ru"
+    note = pool_note(ready, len(pool_names), lang, hero_by_name)
     if settings["strongPairs"] and not ready["pairs"]:
-        note += " Пар сильных не нашлось."
+        note += " No strong pairs found." if is_en(lang) else " Пар сильных не нашлось."
     if settings.get("draft") == "Masters":
-        note += " SCORE — по начальной расстановке, до банов и пиков."
+        note += (
+            " SCORE is for the opening lineup, before bans and picks."
+            if is_en(lang)
+            else " SCORE — по начальной расстановке, до банов и пиков."
+        )
     if reached:
         note += " SCORE 0."
     else:
-        note += " SCORE 0 не нашёлся, показан лучший из найденных."
-    excluded = cut_records(hero_by_name, ready["frequent"], ready["strong"], ready["weak"], ready["recent"], ready.get("droppedLatest"))
+        note += (
+            " SCORE 0 was not found; showing the best found."
+            if is_en(lang)
+            else " SCORE 0 не нашёлся, показан лучший из найденных."
+        )
+    excluded = cut_records(
+        hero_by_name, ready["frequent"], ready["strong"], ready["weak"],
+        ready["recent"], ready.get("droppedLatest"), lang,
+    )
     roster, pool_names = apply_latest(roster, pool_names, settings, hero_by_name, ready["paired_names"])
     return finish(data, roster, settings, [note], "roll", pool_names, excluded, ready["pair_reasons"])
+
+
+def build_unknown_group(data, candidates, count, settings, rng):
+    if count <= 0:
+        return []
+    if len(candidates) < count:
+        raise ValueError("Не хватает героев для состава неизвестных")
+    names = [hero["name"] for hero in candidates]
+    seed = rng.choice(names)
+    chosen = [seed]
+    taken = {seed}
+    while len(chosen) < count:
+        ranked = []
+        for name in names:
+            if name in taken:
+                continue
+            ranked.append((-unknown_link_count(data, chosen, name, settings), name))
+        ranked.sort()
+        cutoff = ranked[min(4, len(ranked) - 1)][0]
+        shortlist = [item for item in ranked[:8] if item[0] <= cutoff]
+        if not shortlist:
+            shortlist = ranked[:1]
+        pick = rng.choice(shortlist)[1]
+        chosen.append(pick)
+        taken.add(pick)
+    return chosen
+
+
+def climb_unknown(data, settings, rng, free_pool, locked, steps):
+    need = settings["size"] - len(locked)
+    if need <= 0:
+        return [], roster_unknown_count(data, locked, settings)
+    locked_set = set(locked)
+    current = rng.sample(free_pool, need) if len(free_pool) >= need else list(free_pool)
+    if len(current) < need:
+        return current, roster_unknown_count(data, locked + current, settings)
+    taken = set(current)
+    value = roster_unknown_count(data, locked + current, settings)
+    for _ in range(steps):
+        index = rng.randrange(need)
+        add = free_pool[rng.randrange(len(free_pool))]
+        if add in taken or add in locked_set:
+            continue
+        previous = current[index]
+        current[index] = add
+        taken.remove(previous)
+        taken.add(add)
+        trial = roster_unknown_count(data, locked + current, settings)
+        if trial >= value:
+            value = trial
+        else:
+            current[index] = previous
+            taken.remove(add)
+            taken.add(previous)
+    return current, value
+
+
+def roll_unknown(data, settings, rng):
+    ready = field(data, settings)
+    hero_by_name = ready["hero_by_name"]
+    locked = list(ready["paired_names"])
+    free_pool = [hero["name"] for hero in ready["kept"]]
+    if settings.get("latestSet"):
+        for name in LATEST_SET:
+            if name in hero_by_name and name not in free_pool and name not in locked:
+                free_pool.append(name)
+    need = ready["regular_roster"]
+    if need > len(free_pool):
+        raise ValueError("После исключений осталось меньше " + str(settings["size"]) + " героев")
+    best_free = None
+    best_value = -1
+    for restart in range(5):
+        if need <= 0:
+            found = []
+            value = roster_unknown_count(data, locked, settings)
+        elif restart == 0:
+            start = build_unknown_group(
+                data,
+                [hero_by_name[name] for name in free_pool],
+                need,
+                settings,
+                rng,
+            )
+            current = list(start)
+            taken = set(current)
+            value = roster_unknown_count(data, locked + current, settings)
+            for _ in range(900):
+                index = rng.randrange(need)
+                add = free_pool[rng.randrange(len(free_pool))]
+                if add in taken:
+                    continue
+                previous = current[index]
+                current[index] = add
+                taken.remove(previous)
+                taken.add(add)
+                trial = roster_unknown_count(data, locked + current, settings)
+                if trial >= value:
+                    value = trial
+                else:
+                    current[index] = previous
+                    taken.remove(add)
+                    taken.add(previous)
+            found = current
+        else:
+            found, value = climb_unknown(data, settings, rng, free_pool, locked, 900)
+        if value > best_value:
+            best_free = found
+            best_value = value
+    if best_free is None:
+        raise ValueError("Ростер неизвестных не собрался")
+    roster = list(best_free) + locked
+    roster, pool_names = apply_latest(roster, list(roster), settings, hero_by_name, ready["paired_names"])
+    floor = settings["minGames"]
+    lang = settings.get("lang") or "ru"
+    if is_en(lang):
+        note = (
+            "Roster of " + str(len(roster)) + " built for unknown pairs: no games or up to "
+            + str(floor) + " games. Found " + str(best_value) + " such pairs."
+        )
+        if settings.get("draft") == "Masters":
+            note += " Masters: opening lineup."
+    else:
+        note = (
+            "Ростер из " + str(len(roster)) + " собран по неизвестным парам: нет матчей или до "
+            + str(floor) + " игр."
+        )
+        note += " Найдено " + str(best_value) + " таких пар."
+        if settings.get("draft") == "Masters":
+            note += " Masters: состав по начальной расстановке."
+    excluded = cut_records(
+        hero_by_name, ready["frequent"], ready["strong"], ready["weak"],
+        ready["recent"], ready.get("droppedLatest"), lang,
+    )
+    return finish(data, roster, settings, [note], "unknown", pool_names, excluded, ready["pair_reasons"])
 
 
 def rescore(data, settings, roster_names, pool_names, excluded):
@@ -683,6 +884,7 @@ def catalog_item(hero, played=None):
     rate = hero.get("winRate", 0)
     return {
         "name": hero["name"],
+        "nameEn": hero.get("nameEn") or hero["name"],
         "image": hero.get("image", ""),
         "winRate": rate,
         "games": games,
@@ -753,15 +955,24 @@ def swap(data, settings, roster, remove, add, pool_names=None, excluded=None):
         if isinstance(item, dict) and item.get("name") != add:
             kept.append(item)
     info = cell(data, add, remove)
-    note = add + " входит вместо " + remove + "."
-    if info:
-        note += " Личная встреча: " + format_pct(info["pct"]) + " в " + str(info["games"]) + " играх."
+    lang = settings.get("lang") or "ru"
+    add_l = hero_by_name_map(data).get(add, {}).get("nameEn" if is_en(lang) else "name", add)
+    remove_l = hero_by_name_map(data).get(remove, {}).get("nameEn" if is_en(lang) else "name", remove)
+    if is_en(lang):
+        note = add_l + " comes in for " + remove_l + "."
+        if info:
+            note += " Head-to-head: " + format_pct(info["pct"]) + " in " + str(info["games"]) + " games."
+    else:
+        note = add + " входит вместо " + remove + "."
+        if info:
+            note += " Личная встреча: " + format_pct(info["pct"]) + " в " + str(info["games"]) + " играх."
     return finish(data, roster, settings, [note], "swap", pool_names, kept)
 
 
 def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, pair_reasons=None):
     hero_by_name = hero_by_name_map(data)
     pair_reasons = pair_reasons or {}
+    lang = settings.get("lang") or "ru"
     roster = sorted(roster, key=lambda name: name)
     pairs = known_pairs(data, roster, settings)
     ideal, buckets = roster_score(data, roster, settings)
@@ -773,8 +984,10 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
         weight = settings["weightBelow"] if side == "below" else settings["weightAbove"]
         problems.append({
             "hero": hero_by_name[hero_name]["name"],
+            "nameEn": hero_by_name[hero_name].get("nameEn") or hero_name,
             "heroImage": hero_by_name[hero_name].get("image", ""),
             "opponent": hero_by_name[opponent_name]["name"],
+            "opponentNameEn": hero_by_name[opponent_name].get("nameEn") or opponent_name,
             "opponentImage": hero_by_name[opponent_name].get("image", ""),
             "pct": info["pct"],
             "wins": info["wins"],
@@ -788,7 +1001,7 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
     heroes = []
     for name in roster:
         hero = dict(hero_by_name[name])
-        hero["reason"] = pair_reasons.get(name, why_kept(hero, True))
+        hero["reason"] = pair_reasons.get(name, why_kept(hero, True, lang))
         heroes.append(hero)
 
     matrix = []
@@ -815,7 +1028,7 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
         for name in sorted(pool_names):
             hero = dict(hero_by_name[name])
             hero["inRoster"] = name in set(roster)
-            hero["reason"] = pair_reasons.get(name, why_kept(hero, hero["inRoster"]))
+            hero["reason"] = pair_reasons.get(name, why_kept(hero, hero["inRoster"], lang))
             pool.append(hero)
 
     duels = {}
@@ -878,5 +1091,8 @@ def finish(data, roster, settings, notes, mode, pool_names=None, excluded=None, 
             "draft": settings.get("draft") or "",
         },
         "problems": problems,
-        "nuances": collect_nuances(data, floor=max(1, int(settings["minGames"])), names=roster)["groups"],
+        "unknown": unknown_pairs(data, roster, settings, hero_by_name),
+        "nuances": collect_nuances(
+            data, floor=max(1, int(settings["minGames"])), names=roster, lang=lang
+        )["groups"],
     }

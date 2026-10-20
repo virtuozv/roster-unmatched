@@ -1,3 +1,6 @@
+import { onLangChange, t } from "./i18n.js";
+import { heroLabel } from "./names.js";
+
 const menu = document.getElementById("menu");
 const menuReplace = document.getElementById("menuReplace");
 const picker = document.getElementById("picker");
@@ -41,7 +44,7 @@ export function openChoose(options) {
   replaceName = null;
   closeMenu();
   pickerTitle.textContent = options.title;
-  pickerSearch.placeholder = options.placeholder || "Имя героя";
+  pickerSearch.placeholder = options.placeholder || t("searchHero");
   pickerSearch.value = "";
   renderPicker("");
   picker.hidden = false;
@@ -59,8 +62,10 @@ function openPicker() {
     return;
   }
   closeMenu();
-  pickerTitle.textContent = "Заменить " + replaceName;
-  pickerSearch.placeholder = replaceMode === "map" ? "Название карты" : "Имя героя";
+  pickerTitle.textContent = t("replaceNamed", {
+    name: replaceMode === "map" ? replaceName : heroLabel(replaceName),
+  });
+  pickerSearch.placeholder = replaceMode === "map" ? t("searchMap") : t("searchHero");
   pickerSearch.value = "";
   renderPicker("");
   picker.hidden = false;
@@ -76,7 +81,7 @@ function renderPicker(query) {
       const clear = document.createElement("button");
       clear.type = "button";
       clear.className = "picker-clear";
-      clear.textContent = "Убрать";
+      clear.textContent = t("remove");
       clear.addEventListener("click", () => {
         const drop = choose.onClear;
         closePicker();
@@ -89,7 +94,7 @@ function renderPicker(query) {
       button.type = "button";
       button.append(choose.shot(hero));
       const label = document.createElement("span");
-      label.textContent = hero.name;
+      label.textContent = heroLabel(hero);
       button.append(label);
       button.addEventListener("click", () => {
         const pick = choose.onPick;
@@ -118,7 +123,7 @@ function renderPicker(query) {
     button.type = "button";
     button.append(actions.heroShot(hero));
     const label = document.createElement("span");
-    label.textContent = hero.name;
+    label.textContent = heroLabel(hero);
     button.append(label);
     button.addEventListener("click", () => actions.replaceHero(hero.name));
     pickerList.append(button);
@@ -153,5 +158,19 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeMenu();
     closePicker();
+  }
+});
+
+onLangChange(() => {
+  if (!picker.hidden && replaceMode === "choose" && choose) {
+    pickerTitle.textContent = choose.title;
+    pickerSearch.placeholder = choose.placeholder || t("searchHero");
+    renderPicker(pickerSearch.value);
+  } else if (!picker.hidden && replaceName) {
+    pickerTitle.textContent = t("replaceNamed", {
+      name: replaceMode === "map" ? replaceName : heroLabel(replaceName),
+    });
+    pickerSearch.placeholder = replaceMode === "map" ? t("searchMap") : t("searchHero");
+    renderPicker(pickerSearch.value);
   }
 });

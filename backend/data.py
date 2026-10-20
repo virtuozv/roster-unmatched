@@ -15,6 +15,29 @@ def short_code(character):
     return codes[0]
 
 
+def english_name(name, aliases):
+    latin = []
+    for alias in aliases or []:
+        token = str(alias).strip()
+        if not token or re.fullmatch(r"[A-Z]{2,4}", token):
+            continue
+        if re.search(r"[А-Яа-яЁё]", token):
+            continue
+        latin.append(token)
+    if not latin:
+        return name
+    if " и " in name.lower() or " & " in name:
+        paired = [alias for alias in latin if "&" in alias or " and " in alias.lower()]
+        if paired:
+            paired.sort(key=len, reverse=True)
+            return paired[0]
+    best = latin[0]
+    for alias in latin[1:]:
+        if best.lower() in alias.lower() and len(alias) > len(best):
+            best = alias
+    return best
+
+
 def normalize_label(value):
     value = value.lower().replace("ё", "е")
     return re.sub(r"[^a-zа-я0-9]+", "", value)
@@ -55,9 +78,12 @@ def load_data(stats_path=None):
     by_alias = {}
     codes = {}
     alias_by_name = {}
+    name_en = {}
     for character in roster["characters"]:
         codes[character["name"]] = short_code(character)
-        alias_by_name[character["name"]] = list(character["aliases"])
+        aliases = list(character["aliases"])
+        alias_by_name[character["name"]] = aliases
+        name_en[character["name"]] = english_name(character["name"], aliases)
         by_alias[character["name"].strip().lower()] = character["name"]
         for alias in character["aliases"]:
             by_alias[alias.strip().lower()] = character["name"]
@@ -118,6 +144,7 @@ def load_data(stats_path=None):
         rate = 100 * bucket["wins"] / games if games else 50
         heroes.append({
             "name": name,
+            "nameEn": name_en.get(name, name),
             "code": codes.get(name, name[:3]),
             "wins": bucket["wins"],
             "losses": bucket["losses"],
@@ -135,6 +162,7 @@ def load_data(stats_path=None):
             continue
         unplayed.append({
             "name": name,
+            "nameEn": name_en.get(name, name),
             "code": code,
             "wins": 0,
             "losses": 0,

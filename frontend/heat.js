@@ -1,3 +1,6 @@
+import { t } from "./i18n.js";
+import { heroLabel, rememberHeroes } from "./names.js";
+
 const matrix = document.getElementById("matrix");
 
 export function drawMatrix(heroes, cells, band, host) {
@@ -5,6 +8,7 @@ export function drawMatrix(heroes, cells, band, host) {
   const low = band && Number.isFinite(band.low) ? band.low : 45;
   const high = band && Number.isFinite(band.high) ? band.high : 55;
   const minGames = band && Number.isFinite(band.minGames) ? band.minGames : 5;
+  rememberHeroes(heroes);
   const scores = rosterScores(cells, minGames);
   const ranks = bestHeroes(scores, 5);
   board.replaceChildren();
@@ -30,11 +34,16 @@ export function drawMatrix(heroes, cells, band, host) {
       if (info.games < minGames) {
         node.classList.add("dim");
       }
-      let title = hero.name + " против " + opponent.name + ": " + Math.round(info.pct) + "%, " + info.games + " игр";
+      let title = t("heatCell", {
+        hero: heroLabel(hero),
+        opponent: heroLabel(opponent),
+        pct: Math.round(info.pct),
+        games: info.games,
+      });
       if (info.games < minGames) {
-        title += ", мало игр";
+        title += ", " + t("fewGames");
       } else if (info.pct < low || info.pct > high) {
-        title += ", вне коридора";
+        title += ", " + t("outsideBand");
       }
       node.title = title;
       grid.append(node);
@@ -52,7 +61,7 @@ function axisNode(hero, className, rank, score) {
   const image = document.createElement("img");
   image.className = rank ? "axis best" : "axis";
   if (hero.image) image.src = hero.image;
-  image.alt = hero.name;
+  image.alt = heroLabel(hero);
   frame.append(image);
   if (rank) {
     const place = document.createElement("span");
@@ -65,12 +74,17 @@ function axisNode(hero, className, rank, score) {
 }
 
 function heroTitle(hero, score, rank) {
-  const place = rank ? rank + " место. " : "";
+  const place = rank ? t("heatPlace", { rank }) : "";
+  const name = heroLabel(hero);
   if (!score || !score.known) {
-    return place + hero.name;
+    return place + name;
   }
-  const average = Math.round(score.average);
-  return place + hero.name + ", средний " + average + "% против ростера, " + score.known + " пар";
+  return t("heatHero", {
+    place,
+    name,
+    avg: Math.round(score.average),
+    known: score.known,
+  });
 }
 
 export function strongestMarks(cells, minGames, count) {
@@ -140,9 +154,15 @@ function cellNode(text, className) {
 }
 
 function heatTone(pct) {
-  const shift = Math.max(-1, Math.min(1, (pct - 50) / 25));
-  const background = shift < 0 ? mix("#8d3d36", "#f3eee4", 1 + shift) : mix("#f3eee4", "#2c6a49", shift);
-  return { background, color: Math.abs(shift) > 0.55 ? "#f4eee4" : "#241c16" };
+  const t = Math.max(0, Math.min(1, (pct - 25) / 50));
+  const eased = t * t * (3 - 2 * t);
+  const low = "#e4a195";
+  const mid = "#f6f1ea";
+  const high = "#86c4a6";
+  const background = eased < 0.5
+    ? mix(low, mid, eased * 2)
+    : mix(mid, high, (eased - 0.5) * 2);
+  return { background, color: "#2a221c" };
 }
 
 function mix(from, to, amount) {

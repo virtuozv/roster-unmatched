@@ -1,10 +1,13 @@
 import { countWord } from "./format.js";
+import { t } from "./i18n.js";
 import { closeMenu, closePicker } from "./picker.js";
 import { state } from "./state.js";
+import { paintUnknown } from "./unknown.js";
 
 const tabHeroes = document.getElementById("tabHeroes");
 const tabMaps = document.getElementById("tabMaps");
 const tabBuild = document.getElementById("tabBuild");
+const tabUnknown = document.getElementById("tabUnknown");
 const title = document.getElementById("title");
 const heroActions = document.getElementById("heroActions");
 const mapActions = document.getElementById("mapActions");
@@ -14,19 +17,25 @@ const board = document.getElementById("board");
 const mapGate = document.getElementById("mapGate");
 const mapBoard = document.getElementById("mapBoard");
 const buildBoard = document.getElementById("buildBoard");
+const unknownBoard = document.getElementById("unknownBoard");
 const mapSizeInput = document.getElementById("mapSize");
 const error = document.getElementById("error");
 
-const titles = {
-  heroes: "Драфт героев",
-  maps: "Драфт карт",
-  build: "Конструктор",
-};
+function modeTitle(mode) {
+  const keys = {
+    heroes: "modeHeroes",
+    maps: "modeMaps",
+    build: "modeBuild",
+    unknown: "modeUnknown",
+  };
+  return t(keys[mode] || "modeHeroes");
+}
 
 export function startTabs() {
   tabHeroes.addEventListener("click", () => showTab("heroes"));
   tabMaps.addEventListener("click", () => showTab("maps"));
   tabBuild.addEventListener("click", () => showTab("build"));
+  tabUnknown.addEventListener("click", () => showTab("unknown"));
   applyTab();
   loadCounted();
 }
@@ -36,7 +45,8 @@ export function applyTab() {
   tabHeroes.classList.toggle("is-on", mode === "heroes");
   tabMaps.classList.toggle("is-on", mode === "maps");
   tabBuild.classList.toggle("is-on", mode === "build");
-  title.textContent = titles[mode] || titles.heroes;
+  tabUnknown.classList.toggle("is-on", mode === "unknown");
+  title.textContent = modeTitle(mode);
   heroActions.hidden = mode !== "heroes";
   mapActions.hidden = mode !== "maps";
   buildActions.hidden = mode !== "build";
@@ -45,12 +55,20 @@ export function applyTab() {
   mapGate.hidden = mode !== "maps" || state.mapReady;
   mapBoard.hidden = mode !== "maps" || !state.mapReady;
   buildBoard.hidden = mode !== "build";
+  unknownBoard.hidden = mode !== "unknown";
   placeRollButton("roll", "rollHome", "heroGateSlot", state.heroReady);
   placeRollButton("mapRoll", "mapRollHome", "mapGateSlot", state.mapReady);
   placeEventFilter();
   const statsWrap = document.getElementById("statsSourceWrap");
   if (statsWrap) {
     statsWrap.hidden = mode === "maps";
+  }
+  const minGamesWrap = document.getElementById("minGamesWrap");
+  if (minGamesWrap) {
+    minGamesWrap.hidden = mode !== "unknown";
+  }
+  if (mode === "unknown") {
+    paintUnknown();
   }
   paintCounted();
 }
@@ -124,7 +142,10 @@ export function paintCounted() {
       counted.textContent = "";
       return;
     }
-    counted.textContent = "учтено " + state.countedMaps + " " + countWord(state.countedMaps, "карта", "карты", "карт");
+    counted.textContent = t("countedMaps", {
+      n: state.countedMaps,
+      maps: countWord(state.countedMaps, t("mapOne"), t("mapFew"), t("mapMany")),
+    });
     return;
   }
   const stats = chosenStats();
@@ -132,9 +153,15 @@ export function paintCounted() {
     counted.textContent = "";
     return;
   }
-  let text = "учтено " + stats.counted + " " + countWord(stats.counted, "герой", "героя", "героев");
+  let text = t("countedHeroes", {
+    n: stats.counted,
+    heroes: countWord(stats.counted, t("heroOne"), t("heroFew"), t("heroMany")),
+  });
   if (Number.isFinite(stats.matches)) {
-    text += ", " + stats.matches + " " + countWord(stats.matches, "матч", "матча", "матчей");
+    text += t("countedMatches", {
+      n: stats.matches,
+      matches: countWord(stats.matches, t("matchOne"), t("matchFew"), t("matchMany")),
+    });
   }
   counted.textContent = text;
 }
