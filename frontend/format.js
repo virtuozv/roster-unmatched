@@ -21,3 +21,18 @@ export function formatBound(value, fallback) {
   }
   return shown.toFixed(1).replace(".", ",");
 }
+
+export function formatScore(value) {
+  return Number(value).toFixed(1).replace(".", ",");
+}
+
+export function formatBandPercent(summary) {
+  const below = Number(summary.below) || 0;
+  const inside = Number(summary.inside) || 0;
+  const above = Number(summary.above) || 0;
+  const known = below + inside + above;
+  if (known <= 0) {
+    return "—";
+  }
+  return ((100 * inside) / known).toFixed(1).replace(".", ",") + "%";
+}

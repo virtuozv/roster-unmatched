@@ -494,6 +494,16 @@ button.danger:disabled { opacity: 0.5; cursor: wait; }
   font-family: Palatino, "Palatino Linotype", serif;
   font-size: 42px;
   line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.ideal-raw {
+  color: var(--muted);
+  font-family: "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .ideal-note { color: var(--muted); margin-top: 6px; max-width: 720px; }
 
@@ -861,6 +871,11 @@ button.danger:disabled { opacity: 0.5; cursor: wait; }
 
 .roster li.is-focus {
   border-color: var(--ink);
+}
+
+.roster li.is-in-band {
+  border-color: #2c6a49;
+  box-shadow: inset 0 0 0 2px #2c6a49;
 }
 
 .shot {

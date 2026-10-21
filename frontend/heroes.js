@@ -1,5 +1,5 @@
 import { selectedEvents } from "./events.js";
-import { countWord, formatBound } from "./format.js";
+import { countWord, formatBandPercent, formatBound, formatScore } from "./format.js";
 import { drawMatrix, strongestMarks, weakestMarks } from "./heat.js";
 import { getLang, onLangChange, t } from "./i18n.js";
 import { heroLabel, rememberHeroes } from "./names.js";
@@ -14,7 +14,8 @@ const roster = document.getElementById("roster");
 const cuts = document.getElementById("cuts");
 const note = document.getElementById("note");
 const ideal = document.getElementById("ideal");
-const idealValue = document.getElementById("idealValue");
+const idealPct = document.getElementById("idealPct");
+const idealRaw = document.getElementById("idealRaw");
 const idealNote = document.getElementById("idealNote");
 const problems = document.getElementById("problems");
 const problemsNote = document.getElementById("problemsNote");
@@ -535,7 +536,8 @@ async function rescoreActive() {
   if (active.length < 2) {
     rosterView = null;
     ideal.hidden = false;
-    idealValue.textContent = "—";
+    idealPct.textContent = "—";
+    idealRaw.textContent = "";
     idealNote.textContent = t("lessThanTwoBanned");
     nuances.replaceChildren();
     const line = document.createElement("p");
@@ -572,15 +574,18 @@ async function rescoreActive() {
 function showIdeal(summary) {
   ideal.hidden = false;
   const value = typeof summary.ideal === "number" ? summary.ideal : 0;
-  idealValue.textContent = formatScore(value);
+  const pct = formatBandPercent(summary);
+  const score = formatScore(value);
+  idealPct.textContent = pct;
+  idealRaw.textContent = pct === "—" ? "" : "SCORE " + score;
   const known = summary.knownPairs || 0;
   const floor = gameFloor(summary.minGames);
   const games = floor + " " + countWord(floor, t("gameOne"), t("gameFew"), t("gameMany"));
   const buckets = bucketLine(summary);
   const weights = weightLine(summary);
-  let text = t("scoreExplain", { buckets, weights, games });
+  let text = t("scoreExplain", { pct, score, buckets, weights, games });
   if (summary.draft === "Masters") {
-    text = t("scoreMasters", { buckets, weights, known });
+    text = t("scoreMasters", { pct, score, buckets, weights, known });
   }
   idealNote.textContent = text;
 }
@@ -776,6 +781,9 @@ function showEdges(name) {
     }
     const row = rosterView.duels[card.dataset.hero];
     const info = row ? row[column] : null;
+    if (info && info.games >= rosterView.minGames && info.pct >= rosterView.low && info.pct <= rosterView.high) {
+      card.classList.add("is-in-band");
+    }
     const edge = matchupEdge(info);
     if (!rosterView.order.includes(card.dataset.hero)) {
       edge.append(noteLine(spareText(pairStats(card.dataset.hero, name))));
@@ -895,10 +903,6 @@ function pullText(item) {
   return t("pullWeight", { weight: formatScore(weight), side });
 }
 
-function formatScore(value) {
-  return Number(value).toFixed(1).replace(".", ",");
-}
-
 function bucketLine(summary) {
   return t("bucketsLine", {
     below: summary.below || 0,
@@ -934,6 +938,7 @@ function noteLine(text, className) {
 function clearEdges() {
   for (const card of document.querySelectorAll("[data-hero]")) {
     card.classList.remove("is-focus");
+    card.classList.remove("is-in-band");
     const edge = card.querySelector(".edge");
     if (edge) {
       edge.remove();

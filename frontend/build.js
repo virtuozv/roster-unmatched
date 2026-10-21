@@ -1,5 +1,5 @@
 import { fromDroppedEvent, selectedEvents } from "./events.js";
-import { countWord } from "./format.js";
+import { countWord, formatBandPercent, formatScore } from "./format.js";
 import { drawMatrix, strongestMarks, weakestMarks } from "./heat.js";
 import { matchesHero, portrait, showNuances, showProblems } from "./heroes.js";
 import { getLang, onLangChange, t } from "./i18n.js";
@@ -44,7 +44,8 @@ const buildMatrix = document.getElementById("buildMatrix");
 const buildMatrixLead = document.getElementById("buildMatrixLead");
 const buildMatrixLegend = document.getElementById("buildMatrixLegend");
 const roster = document.getElementById("buildRoster");
-const idealValue = document.getElementById("buildIdealValue");
+const idealPct = document.getElementById("buildIdealPct");
+const idealRaw = document.getElementById("buildIdealRaw");
 const idealNote = document.getElementById("buildIdealNote");
 const error = document.getElementById("error");
 
@@ -685,7 +686,8 @@ function score() {
     requestId += 1;
     buildView = null;
     marks = new Map();
-    idealValue.textContent = "—";
+    idealPct.textContent = "—";
+    idealRaw.textContent = "";
     const waiting = slots.filter(Boolean).length >= 2
       ? t("lessThanTwoBanned")
       : t("buildIdealWait");
@@ -732,9 +734,14 @@ function score() {
       };
       marks = rankMarks(payload.heroes || [], payload.matrix || [], buildView.minGames);
       const value = typeof summary.ideal === "number" ? summary.ideal : 0;
-      idealValue.textContent = formatScore(value);
+      const pct = formatBandPercent(summary);
+      const score = formatScore(value);
+      idealPct.textContent = pct;
+      idealRaw.textContent = pct === "—" ? "" : "SCORE " + score;
       const games = buildView.minGames + " " + countWord(buildView.minGames, t("gameOne"), t("gameFew"), t("gameMany"));
       let text = t("scoreExplain", {
+        pct,
+        score,
         buckets: bucketLine(summary),
         weights: weightLine(summary),
         games,
@@ -786,13 +793,18 @@ function showBuildEdges(name) {
       continue;
     }
     const row = buildView.duels[card.dataset.buildHero];
-    shot.append(matchupEdge(row ? row[column] : null));
+    const info = row ? row[column] : null;
+    if (info && info.games >= buildView.minGames && info.pct >= buildView.low && info.pct <= buildView.high) {
+      card.classList.add("is-in-band");
+    }
+    shot.append(matchupEdge(info));
   }
 }
 
 function clearBuildEdges() {
   for (const card of roster.querySelectorAll("[data-build-hero]")) {
     card.classList.remove("is-focus");
+    card.classList.remove("is-in-band");
     const edge = card.querySelector(".edge");
     if (edge) {
       edge.remove();
@@ -887,10 +899,6 @@ function pairStats(name) {
     slots,
     problems: below + above,
   };
-}
-
-function formatScore(value) {
-  return Number(value).toFixed(1).replace(".", ",");
 }
 
 function bucketLine(summary) {
