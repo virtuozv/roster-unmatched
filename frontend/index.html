@@ -24,21 +24,8 @@
       </div>
       <h1><span id="title">Конструктор</span> <span id="counted" class="counted"></span></h1>
       <p class="recent-line" data-i18n="recentLine">Последние турниры — Last Chance 2026, First Chance 2026, Weekcup</p>
-      <div id="statsSourceWrap" class="stats-row">
-        <label class="size">
-          <span data-i18n="stats">Статистика</span>
-          <select id="statsSource">
-            <option value="all" data-i18n="statsAll">Всего</option>
-            <option value="saskia" data-i18n="statsSaskia">Саския</option>
-            <option value="umleague">UmLeague</option>
-          </select>
-        </label>
-        <label id="minGamesWrap" class="size" hidden>
-          <span data-i18n="minGames">Матчей до</span>
-          <input id="minGames" type="number" min="0" max="40" value="5">
-        </label>
-      </div>
     </div>
+    <div class="top-right">
     <div id="heroActions" class="actions" hidden>
       <div id="heroFilters" class="filter-groups">
         <fieldset class="filter-set">
@@ -52,11 +39,6 @@
             <input id="dropUnknown" type="checkbox">
             <span data-i18n="dropUnknown">Несыгранные партии</span>
             <button class="hint" type="button" aria-label="Что делает «Несыгранные партии»">i<span class="hint-text" data-i18n="dropUnknownHint">В ростере остаются только пары, где герои уже играли друг с другом.</span></button>
-          </label>
-          <label class="check">
-            <input id="dropLatest" type="checkbox">
-            <span data-i18n="dropLatest">Последний набор</span>
-            <button class="hint" type="button" aria-label="Что делает «Не брать последний набор»">i<span class="hint-text" data-i18n="dropLatestHint">Не берёт Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу.</span></button>
           </label>
         </fieldset>
         <fieldset class="filter-set">
@@ -79,6 +61,11 @@
             <input id="showRanks" type="checkbox">
             <span data-i18n="showRanks">Сильные и слабые</span>
             <button class="hint" type="button" aria-label="Что делает «Сильные и слабые»">i<span class="hint-text" data-i18n="showRanksHint">Зелёные номера — до шести с самым высоким процентом побед внутри ростера, красные — до шести с самым низким. Состав не меняет.</span></button>
+          </label>
+          <label class="check">
+            <input id="showEvents" type="checkbox">
+            <span data-i18n="showEvents">Weekcup и Chance</span>
+            <button class="hint" type="button" aria-label="Что делает «Weekcup и Chance» на карточках">i<span class="hint-text" data-i18n="showEventsHint">Показывает на карточке, был ли герой в Weekcup или Chance 2026. Без галочки подписи пропадают.</span></button>
           </label>
         </fieldset>
       </div>
@@ -147,21 +134,6 @@
     </div>
     <div id="buildActions" class="actions">
       <div id="buildFilters" class="filter-groups">
-        <fieldset id="dropEventsWrap" class="filter-set event-exclude">
-          <legend data-i18n="dropEvents">Исключить турниры</legend>
-          <label class="check">
-            <input type="checkbox" value="Last Chance 2026">
-            Last Chance 2026
-          </label>
-          <label class="check">
-            <input type="checkbox" value="First Chance 2026">
-            First Chance 2026
-          </label>
-          <label class="check">
-            <input type="checkbox" value="Weekcup">
-            Weekcup
-          </label>
-        </fieldset>
         <fieldset class="filter-set">
           <legend data-i18n="dontTake">Не брать</legend>
           <label class="check">
@@ -173,11 +145,6 @@
             <input id="buildDropUnknown" type="checkbox">
             <span data-i18n="dropUnknown">Несыгранные партии</span>
             <button class="hint" type="button" aria-label="Что делает «Несыгранные партии»">i<span class="hint-text" data-i18n="dropUnknownHintBuild">В списке остаются герои, которые уже играли с каждым, кто уже выбран.</span></button>
-          </label>
-          <label class="check">
-            <input id="buildDropLatest" type="checkbox">
-            <span data-i18n="dropLatest">Последний набор</span>
-            <button class="hint" type="button" aria-label="Что делает «Не брать последний набор»">i<span class="hint-text" data-i18n="dropLatestHint">Не берёт Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу.</span></button>
           </label>
         </fieldset>
         <fieldset class="filter-set">
@@ -223,16 +190,6 @@
             <span data-i18n="bandHigh">До %</span>
             <input id="buildBandHigh" type="number" min="0" max="100" value="55">
           </label>
-          <label class="size">
-            <span data-i18n="draft">Драфт</span>
-            <select id="buildDraft">
-              <option value="">—</option>
-              <option>Masters</option>
-              <option disabled>Weekcup</option>
-              <option disabled>Ladder</option>
-              <option disabled>Last Chance</option>
-            </select>
-          </label>
         </div>
         <div class="action-row">
           <label class="size">
@@ -248,16 +205,31 @@
             <input id="buildWeightNone" type="number" min="0" max="20" step="0.5" value="0">
           </label>
         </div>
-        <div class="action-row roll-row">
-          <button id="buildRoll" class="primary" type="button" data-i18n="buildRoll">Собрать ростер</button>
-          <button id="buildIdealRoll" class="danger" type="button" data-i18n="buildIdeal">SCORE 0</button>
-        </div>
       </div>
+    </div>
+    <div id="statsSourceWrap" class="stats-row">
+      <label class="size">
+        <span data-i18n="stats">Статистика</span>
+        <select id="statsSource">
+          <option value="all" data-i18n="statsAll">Всего</option>
+          <option value="saskia" data-i18n="statsSaskia">Саския</option>
+          <option value="umleague">UmLeague</option>
+        </select>
+      </label>
+      <button id="dropEventsOpen" class="event-exclude-btn" type="button">
+        <span data-i18n="dropEvents">Исключить турниры</span>
+        <span id="dropEventsCount" class="event-exclude-count" hidden></span>
+      </button>
+      <label id="minGamesWrap" class="size" hidden>
+        <span data-i18n="minGames">Матчей до</span>
+        <input id="minGames" type="number" min="0" max="40" value="5">
+      </label>
+    </div>
     </div>
   </header>
 
   <section id="gate" class="gate" hidden>
-    <p data-i18n="gateHeroes">Сначала отсекаются герои, которые чаще всего были в недавних ростерах, и те, кто слишком силён по всем турнирам. Из оставшихся собирается пул 20, и уже из него — ростер 15. Без галочки сильные в пул не входят. «Пар сильных» добавляет указанное число пар: в каждой двое компенсируют друг друга. «Слабых» не пускает героев слабее 40%, тех, у кого нет игр, а также Баффи, Ангела, Виллоу, Спайка и Белку. «Исключить турниры» не пускает героев выбранных турниров. «Несыгранные партии» оставляет в ростере только пары, где герои уже играли друг с другом. «Последний набор» в «Не брать» убирает Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу, а в «В ростере» обязательно ставит их. SCORE — сумма штрафов за пары ниже и выше коридора (и опционально за отсутствие данных); 0 — идеал. Красная кнопка ищет ростер со SCORE 0. Masters ставит колоду из 30: SCORE по этой начальной расстановке, баны и пики его не пересчитывают.</p>
+    <p data-i18n="gateHeroes">Сначала отсекаются герои, которые чаще всего были в недавних ростерах, и те, кто слишком силён по всем турнирам. Из оставшихся собирается пул 20, и уже из него — ростер 15. Без галочки сильные в пул не входят. «Пар сильных» добавляет указанное число пар: в каждой двое компенсируют друг друга. «Слабых» не пускает героев слабее 40%, тех, у кого нет игр, а также Баффи, Ангела, Виллоу, Спайка и Белку. «Исключить турниры» не пускает героев выбранных турниров. «Несыгранные партии» оставляет в ростере только пары, где герои уже играли друг с другом. «Последний набор» обязательно ставит Хеллбоя, Лиз Шерман, Эйба Сапиена и Бабу Ягу. SCORE — сумма штрафов за пары ниже и выше коридора (и опционально за отсутствие данных); 0 — идеал. Красная кнопка ищет ростер со SCORE 0. Masters ставит колоду из 30: SCORE по этой начальной расстановке, баны и пики его не пересчитывают.</p>
     <div id="heroGateSlot" class="gate-slot">
       <button id="roll" class="primary" type="button" data-i18n="roll">Собрать ростер</button>
     </div>
@@ -293,6 +265,13 @@
         </div>
       </div>
     </section>
+    <div class="save-bar">
+      <label class="size">
+        <span data-i18n="saveName">Название</span>
+        <input id="heroSaveName" type="text" maxlength="80" placeholder="Имя ростера" data-i18n-placeholder="saveNamePh">
+      </label>
+      <button id="heroSaveRoster" type="button" data-i18n="save">Сохранить</button>
+    </div>
     <div class="lists">
       <section>
         <h2 data-i18n="roster">Ростер</h2>
@@ -334,6 +313,15 @@
 
   <main id="mapBoard" hidden>
     <p id="mapNote" class="note"></p>
+    <div class="save-bar">
+      <label class="size">
+        <span data-i18n="saved">Сохранённые</span>
+        <select id="mapSavedRosters">
+          <option value="">—</option>
+        </select>
+      </label>
+      <button id="mapAttachRoster" type="button" data-i18n="attachToRoster">Присоединить к ростеру</button>
+    </div>
     <div class="lists">
       <section>
         <h2 data-i18n="roster">Ростер</h2>
@@ -387,11 +375,17 @@
         <input id="saveName" type="text" maxlength="80" placeholder="Имя ростера" data-i18n-placeholder="saveNamePh">
       </label>
       <button id="saveRoster" type="button" data-i18n="save">Сохранить</button>
-      <button id="addBuildHero" type="button" data-i18n="add">Добавить</button>
-      <button id="resetBuild" type="button" data-i18n="reset">Сбросить</button>
       <button id="deleteRoster" class="danger" type="button" data-i18n="delete">Удалить</button>
+      <button id="clearBuildMaps" class="danger" type="button" data-i18n="clearMaps" hidden>Удалить карты</button>
+      <button id="resetBuild" class="save-bar-add" type="button" data-i18n="reset">Сбросить</button>
+      <button id="addBuildHero" type="button" data-i18n="add">Добавить</button>
     </div>
     <ol id="buildRoster" class="roster build-roster"></ol>
+    <section class="build-maps-block">
+      <h2 data-i18n="mapsSection">Карты</h2>
+      <p id="buildMapsEmpty" class="ideal-note" data-i18n="mapsNotSelected">Карты ещё не выбраны</p>
+      <ol id="buildMaps" class="roster build-maps" hidden></ol>
+    </section>
     <details class="fold cuts-block">
       <summary><h2 data-i18n="nuances">Нюансы</h2></summary>
       <div id="buildNuances"><p class="ideal-note" data-i18n="buildNuancesEmpty">Ростер не собран.</p></div>
@@ -429,8 +423,29 @@
         <h2 id="pickerTitle" data-i18n="replace">Заменить</h2>
         <input id="pickerSearch" type="search" placeholder="Имя героя" data-i18n-placeholder="searchHero">
         <button id="pickerClose" type="button" data-i18n="close">Закрыть</button>
+        <button id="pickerClearAll" class="picker-add" type="button" data-i18n="clearAll" hidden>Сбросить все</button>
+        <button id="pickerAdd" class="picker-add" type="button" data-i18n="add" hidden>Добавить</button>
       </div>
       <div id="pickerList" class="picker-list"></div>
+    </div>
+  </div>
+  <div id="eventsModal" class="picker" hidden>
+    <div class="picker-card events-card">
+      <div class="picker-head">
+        <h2 data-i18n="dropEvents">Исключить турниры</h2>
+        <button id="eventsModalClose" type="button" data-i18n="close">Закрыть</button>
+      </div>
+      <div class="events-modal-body">
+        <section class="events-section">
+          <h3 data-i18n="recentTournaments">Последние турниры</h3>
+          <p class="events-hint" data-i18n="recentTournamentsHint">Отмечены по умолчанию — героев из них не берём.</p>
+          <div id="eventsRecentList" class="events-check-list"></div>
+        </section>
+        <section class="events-section">
+          <h3 data-i18n="allTournaments">Все турниры</h3>
+          <div id="eventsAllList" class="events-check-list"></div>
+        </section>
+      </div>
     </div>
   </div>
   <script type="module" src="/app.js"></script>

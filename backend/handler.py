@@ -4,11 +4,12 @@ import random
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, unquote, urlparse
 
-from constants import APP_DIR, IMAGE_DIR, MAP_IMAGE_DIR
+from constants import APP_DIR, IMAGE_DIR, MAP_IMAGE_DIR, RECENT_EVENTS
 from maps import map_settings_from, roll_maps, swap_maps
 from balance import list_unknown_heroes
 from roster import hero_catalog, rescore, roll, roll_above, score_roster, settings_from, suggest_strong_pairs, suggest_swaps, swap
-from saved import delete_roster, load_saved, store_roster
+from saved import attach_maps, clear_maps, delete_roster, load_saved, store_roster
+from tournaments import list_tournaments
 
 
 class AppHandler(BaseHTTPRequestHandler):
@@ -66,10 +67,24 @@ class AppHandler(BaseHTTPRequestHandler):
             self.respond(200, {
                 "counted": len(self.maps["maps"]),
                 "rosters": self.maps["pastTotal"],
+                "catalog": [
+                    {
+                        "name": item["name"],
+                        "image": item.get("image") or "",
+                        "aliases": item.get("aliases") or [],
+                    }
+                    for item in self.maps["maps"]
+                ],
             })
             return
         if path == "/api/saved":
             self.respond(200, {"rosters": load_saved()})
+            return
+        if path == "/api/events":
+            self.respond(200, {
+                "events": list_tournaments(),
+                "recent": list(RECENT_EVENTS),
+            })
             return
         if path.startswith("/api/"):
             self.respond(404, {"error": "Не найдено"})
@@ -112,8 +127,19 @@ class AppHandler(BaseHTTPRequestHandler):
             try:
                 if payload.get("remove"):
                     rosters = delete_roster(payload.get("name"))
+                elif payload.get("clearMaps"):
+                    rosters = clear_maps(payload.get("name"))
+                elif payload.get("attachMaps"):
+                    rosters = attach_maps(payload.get("name"), payload.get("maps") or [], self.maps)
                 else:
-                    rosters = store_roster(payload.get("name"), payload.get("names") or [], self.data_for(payload.get("source")))
+                    maps = payload.get("maps") if "maps" in payload else None
+                    rosters = store_roster(
+                        payload.get("name"),
+                        payload.get("names") or [],
+                        self.data_for(payload.get("source")),
+                        maps=maps,
+                        map_data=self.maps,
+                    )
             except ValueError as error:
                 self.respond(400, {"error": str(error)})
                 return

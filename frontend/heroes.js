@@ -79,7 +79,6 @@ export function currentSettings() {
     dropWeak: document.getElementById("dropWeak").checked,
     dropEvents: selectedEvents(),
     dropUnknown: document.getElementById("dropUnknown").checked,
-    dropLatest: document.getElementById("dropLatest").checked,
     latestSet: document.getElementById("latestSet").checked,
     draft: draftSelect.value,
     lang: getLang(),
@@ -160,9 +159,22 @@ async function applyLatestToggle() {
 
 export function startHeroes() {
   const showRanks = document.getElementById("showRanks");
+  const showEvents = document.getElementById("showEvents");
   const paintRanks = () => roster.classList.toggle("show-rank", showRanks.checked);
   showRanks.addEventListener("change", paintRanks);
   paintRanks();
+  if (showEvents) {
+    showEvents.addEventListener("change", () => {
+      if (!lastPayload) {
+        return;
+      }
+      if (heroBanned.size) {
+        paintRosterCards(new Map());
+        return;
+      }
+      paintScored(lastPayload);
+    });
+  }
   strongPairsOn.addEventListener("change", () => {
     strongPairsInput.disabled = !strongPairsOn.checked;
   });
@@ -193,17 +205,9 @@ export function startHeroes() {
     });
   }
   document.getElementById("latestSet").addEventListener("change", () => {
-    if (document.getElementById("latestSet").checked) {
-      document.getElementById("dropLatest").checked = false;
-    }
     applyLatestToggle();
   });
-  document.getElementById("dropLatest").addEventListener("change", () => {
-    if (document.getElementById("dropLatest").checked && document.getElementById("latestSet").checked) {
-      document.getElementById("latestSet").checked = false;
-      applyLatestToggle();
-    }
-  });
+  document.getElementById("heroSaveRoster").addEventListener("click", saveHeroRoster);
   onLangChange(() => {
     paintHeroRollLabel();
     if (lastPayload) {
@@ -214,6 +218,42 @@ export function startHeroes() {
       }
     }
   });
+}
+
+async function saveHeroRoster() {
+  const title = document.getElementById("heroSaveName").value.trim();
+  const names = (lastPayload && lastPayload.heroes || []).map((hero) => hero.name);
+  error.hidden = true;
+  if (!title) {
+    error.hidden = false;
+    error.textContent = t("needSaveName");
+    return;
+  }
+  if (!names.length) {
+    error.hidden = false;
+    error.textContent = t("rosterHasNoHeroes");
+    return;
+  }
+  try {
+    const response = await fetch("/api/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: title,
+        names,
+        source: document.getElementById("statsSource").value,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || t("errSave"));
+    }
+    const { syncSavedRosters } = await import("./build.js");
+    await syncSavedRosters(title);
+  } catch (err) {
+    error.hidden = false;
+    error.textContent = err.message;
+  }
 }
 
 function paintHeroRollLabel() {
@@ -705,7 +745,11 @@ function showProblems(items, summary, list, note) {
 
 export { showProblems };
 
-function nameItem(hero, reason, hoverSource, strength) {
+function eventLabel(events) {
+  return (Array.isArray(events) ? events : []).join(" · ");
+}
+
+function nameItem(hero, _reason, hoverSource, strength) {
   const item = document.createElement("li");
   item.dataset.hero = hero.name;
   const shot = document.createElement("div");
@@ -735,22 +779,18 @@ function nameItem(hero, reason, hoverSource, strength) {
     });
     shot.append(ban);
   }
-  if (hoverSource && rosterView) {
-    const stats = pairStats(hero.name, null);
-    if (stats.below + stats.above > 0) {
-      const mark = document.createElement("span");
-      mark.className = "mark";
-      mark.textContent = "↓" + stats.below + " ↑" + stats.above;
-      mark.title = t("heroBandMark");
-      shot.append(mark);
-    }
-  }
   item.append(shot);
-  if (reason) {
-    const why = document.createElement("p");
-    why.className = "why";
-    why.textContent = reason;
-    item.append(why);
+  const name = document.createElement("p");
+  name.className = "name";
+  name.textContent = heroLabel(hero);
+  item.append(name);
+  const showEvents = document.getElementById("showEvents");
+  const events = showEvents && showEvents.checked ? eventLabel(hero.events || hero.recent) : "";
+  if (events) {
+    const line = document.createElement("p");
+    line.className = "events";
+    line.textContent = events;
+    item.append(line);
   }
   if (hoverSource) {
     item.addEventListener("mouseenter", () => showEdges(hero.name));
@@ -786,9 +826,6 @@ function showEdges(name) {
     }
     const row = rosterView.duels[card.dataset.hero];
     const info = row ? row[column] : null;
-    if (info && info.games >= rosterView.minGames && info.pct >= rosterView.low && info.pct <= rosterView.high) {
-      card.classList.add("is-in-band");
-    }
     const edge = matchupEdge(info);
     if (!rosterView.order.includes(card.dataset.hero)) {
       edge.append(noteLine(spareText(pairStats(card.dataset.hero, name))));
@@ -825,7 +862,6 @@ function matchupEdge(info) {
     edge.classList.add("none");
     return edge;
   }
-  edge.textContent = Math.round(info.pct) + "%";
   const reliable = info.games >= rosterView.minGames;
   if (info.pct > rosterView.line) {
     edge.classList.add("up");
@@ -837,6 +873,15 @@ function matchupEdge(info) {
   if (!reliable) {
     edge.classList.add("thin");
   }
+  if (reliable && info.pct > rosterView.high) {
+    edge.append(verdictBadge("win"));
+  } else if (reliable && info.pct < rosterView.low) {
+    edge.append(verdictBadge("lose"));
+  }
+  const pct = document.createElement("span");
+  pct.className = "pct-line";
+  pct.textContent = Math.round(info.pct) + "%";
+  edge.append(pct);
   edge.append(noteLine(info.games + " " + countWord(info.games, t("matchOne"), t("matchFew"), t("matchMany"))));
   if (!reliable) {
     edge.append(noteLine(t("fewGames"), "games tag"));
@@ -849,6 +894,14 @@ function matchupEdge(info) {
   }
   return edge;
 }
+
+function verdictBadge(kind) {
+  const badge = document.createElement("span");
+  badge.className = "verdict " + (kind === "win" ? "is-win" : "is-lose");
+  badge.textContent = kind === "win" ? t("winsMatchup") : t("losesMatchup");
+  return badge;
+}
+
 
 function pairStats(name, skip) {
   const order = rosterView.order;
@@ -943,7 +996,6 @@ function noteLine(text, className) {
 function clearEdges() {
   for (const card of document.querySelectorAll("[data-hero]")) {
     card.classList.remove("is-focus");
-    card.classList.remove("is-in-band");
     const edge = card.querySelector(".edge");
     if (edge) {
       edge.remove();

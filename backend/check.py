@@ -226,6 +226,9 @@ def check_swaps(data):
 
 
 def check_saved(data):
+    from maps import load_maps
+    from saved import attach_maps
+
     handle = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
     path = handle.name
     handle.close()
@@ -233,11 +236,18 @@ def check_saved(data):
         store_roster("Один", ["Ахиллес", "нет такого", "Сунь Укун"], data, path)
         store_roster("Два", ["Хеллбой"], data, path)
         store_roster("Один", ["Баба Яга", "Лиз Шерман"], data, path)
-        rows = {row["name"]: row["heroes"] for row in load_saved(path)}
-        if set(rows) != {"Один", "Два"} or rows["Один"] != ["Баба Яга", "Лиз Шерман"] or rows["Два"] != ["Хеллбой"]:
+        rows = {row["name"]: row for row in load_saved(path)}
+        if set(rows) != {"Один", "Два"} or rows["Один"]["heroes"] != ["Баба Яга", "Лиз Шерман"] or rows["Два"]["heroes"] != ["Хеллбой"]:
             raise SystemExit("Сохранённые ростеры затёрли друг друга")
+        maps = load_maps()
+        sample = [item["name"] for item in maps["maps"][:2]]
+        attach_maps("Один", sample + ["нет такой"], maps, path)
+        store_roster("Один", ["Баба Яга", "Лиз Шерман", "Хеллбой"], data, path)
+        again = {row["name"]: row for row in load_saved(path)}
+        if again["Один"]["maps"] != sample:
+            raise SystemExit("Карты ростера пропали при сохранении героев")
         left = {row["name"]: row["heroes"] for row in delete_roster("Два", path)}
-        if set(left) != {"Один"} or left["Один"] != ["Баба Яга", "Лиз Шерман"]:
+        if set(left) != {"Один"} or left["Один"] != ["Баба Яга", "Лиз Шерман", "Хеллбой"]:
             raise SystemExit("Удаление ростера задело остальные")
     finally:
         os.remove(path)

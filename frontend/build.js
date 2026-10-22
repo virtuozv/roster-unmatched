@@ -3,6 +3,7 @@ import { countWord, formatBandPercent, formatScore } from "./format.js";
 import { drawMatrix, strongestMarks, weakestMarks } from "./heat.js";
 import { matchesHero, portrait, showNuances, showProblems } from "./heroes.js";
 import { getLang, onLangChange, t } from "./i18n.js";
+import { boardShot, refreshMapSavedList } from "./maps.js";
 import { heroLabel, rememberHeroes } from "./names.js";
 import { openChoose } from "./picker.js";
 
@@ -12,11 +13,10 @@ const bandHighInput = document.getElementById("buildBandHigh");
 const weightBelowInput = document.getElementById("buildWeightBelow");
 const weightAboveInput = document.getElementById("buildWeightAbove");
 const weightNoneInput = document.getElementById("buildWeightNone");
-const draftSelect = document.getElementById("buildDraft");
 const dropWeak = document.getElementById("buildDropWeak");
 const dropUnknown = document.getElementById("buildDropUnknown");
-const dropLatest = document.getElementById("buildDropLatest");
 const latestSet = document.getElementById("buildLatestSet");
+const SAVED_ROSTER_KEY = "savedRosterName";
 const strongPairsOn = document.getElementById("buildStrongPairsOn");
 const strongPairsInput = document.getElementById("buildStrongPairs");
 const showRanks = document.getElementById("buildShowRanks");
@@ -27,8 +27,6 @@ const saveButton = document.getElementById("saveRoster");
 const addButton = document.getElementById("addBuildHero");
 const resetButton = document.getElementById("resetBuild");
 const deleteButton = document.getElementById("deleteRoster");
-const rollButton = document.getElementById("buildRoll");
-const idealButton = document.getElementById("buildIdealRoll");
 const offerButton = document.getElementById("offerSwaps");
 const lowerButton = document.getElementById("offerLower");
 const skipRecentSwaps = document.getElementById("skipRecentSwaps");
@@ -47,10 +45,16 @@ const roster = document.getElementById("buildRoster");
 const idealPct = document.getElementById("buildIdealPct");
 const idealRaw = document.getElementById("buildIdealRaw");
 const idealNote = document.getElementById("buildIdealNote");
+const buildMapsEmpty = document.getElementById("buildMapsEmpty");
+const buildMapsList = document.getElementById("buildMaps");
+const clearBuildMapsButton = document.getElementById("clearBuildMaps");
 const error = document.getElementById("error");
 
 let catalog = [];
+let mapCatalog = [];
+let mapCatalogReady = Promise.resolve();
 let slots = [];
+let attachedMaps = [];
 let requestId = 0;
 let buildView = null;
 let marks = new Map();
@@ -75,13 +79,6 @@ export function startBuild() {
   weightBelowInput.addEventListener("input", score);
   weightAboveInput.addEventListener("input", score);
   weightNoneInput.addEventListener("input", score);
-  draftSelect.addEventListener("change", () => {
-    sizeInput.value = draftSelect.value === "Masters" ? "30" : "15";
-    const next = readSize();
-    if (next !== null) {
-      resize(next);
-    }
-  });
   strongPairsOn.addEventListener("change", () => {
     strongPairsInput.disabled = !strongPairsOn.checked;
     if (strongPairsOn.checked) {
@@ -100,7 +97,6 @@ export function startBuild() {
   showEvents.addEventListener("change", render);
   latestSet.addEventListener("change", () => {
     if (latestSet.checked) {
-      dropLatest.checked = false;
       placeLatest();
       return;
     }
@@ -108,20 +104,13 @@ export function startBuild() {
     render();
     score();
   });
-  dropLatest.addEventListener("change", () => {
-    if (dropLatest.checked && latestSet.checked) {
-      latestSet.checked = false;
-      slots = slots.map((hero) => (hero && hero.latest ? null : hero));
-      render();
-      score();
-    }
-  });
   saveButton.addEventListener("click", saveCurrent);
   addButton.addEventListener("click", addHero);
   resetButton.addEventListener("click", resetBoard);
   deleteButton.addEventListener("click", deleteSaved);
-  rollButton.addEventListener("click", () => requestDraft("/api/roll", rollButton));
-  idealButton.addEventListener("click", () => requestDraft("/api/roll/above", idealButton, t("searching")));
+  if (clearBuildMapsButton) {
+    clearBuildMapsButton.addEventListener("click", clearAttachedMaps);
+  }
   offerButton.addEventListener("click", () => offerSwaps("up"));
   lowerButton.addEventListener("click", () => offerSwaps("down"));
   offerHide.addEventListener("click", () => clearOffers("up"));
@@ -129,24 +118,57 @@ export function startBuild() {
   skipRecentSwaps.addEventListener("change", () => refreshOffers("up"));
   skipRecentLower.addEventListener("change", () => refreshOffers("down"));
   savedSelect.addEventListener("change", () => {
-    if (savedSelect.value) {
-      loadSaved(savedSelect.value);
+    const title = savedSelect.value;
+    rememberSaved(title);
+    if (title) {
+      loadSaved(title);
     }
   });
   loadCatalog();
-  loadSavedList();
+  loadMapCatalog();
+  loadSavedList().then(restoreSaved);
   onLangChange(() => {
-    paintBuildRollLabel();
     render();
     score();
+    paintBuildMaps();
   });
 }
 
-function paintBuildRollLabel() {
-  if (rollButton.disabled) {
+export async function syncSavedRosters(title) {
+  await loadSavedList();
+  refreshMapSavedList(title);
+  if (title && savedRows.some((row) => row.name === title)) {
+    savedSelect.value = title;
+    rememberSaved(title);
+    const row = savedRows.find((item) => item.name === title);
+    attachedMaps = row && row.maps ? [...row.maps] : [];
+    await mapCatalogReady;
+    paintBuildMaps();
+  }
+}
+
+function rememberSaved(title) {
+  if (title) {
+    localStorage.setItem(SAVED_ROSTER_KEY, title);
     return;
   }
-  rollButton.textContent = slots.some(Boolean) ? t("anotherRoster") : t("buildRoll");
+  localStorage.removeItem(SAVED_ROSTER_KEY);
+}
+
+function rememberedSaved() {
+  return localStorage.getItem(SAVED_ROSTER_KEY) || "";
+}
+
+async function restoreSaved() {
+  const title = rememberedSaved();
+  if (!title || !savedRows.some((row) => row.name === title)) {
+    if (title) {
+      rememberSaved("");
+    }
+    return;
+  }
+  savedSelect.value = title;
+  await loadSaved(title);
 }
 
 function readSize() {
@@ -196,6 +218,84 @@ function loadCatalog() {
   return catalogReady;
 }
 
+function loadMapCatalog() {
+  mapCatalogReady = fetch("/api/maps")
+    .then((response) => response.json())
+    .then((payload) => {
+      mapCatalog = payload.catalog || [];
+      paintBuildMaps();
+    })
+    .catch(() => {
+      mapCatalog = [];
+    });
+  return mapCatalogReady;
+}
+
+function paintBuildMaps() {
+  if (!buildMapsEmpty || !buildMapsList) {
+    return;
+  }
+  const names = attachedMaps.filter(Boolean);
+  buildMapsList.replaceChildren();
+  if (clearBuildMapsButton) {
+    clearBuildMapsButton.hidden = !names.length;
+    clearBuildMapsButton.textContent = t("clearMaps");
+  }
+  if (!names.length) {
+    buildMapsEmpty.hidden = false;
+    buildMapsEmpty.textContent = t("mapsNotSelected");
+    buildMapsList.hidden = true;
+    return;
+  }
+  buildMapsEmpty.hidden = true;
+  buildMapsList.hidden = false;
+  names.forEach((name) => {
+    const item = mapCatalog.find((map) => map.name === name) || { name, image: "", aliases: [] };
+    const card = document.createElement("li");
+    card.append(boardShot(item));
+    const label = document.createElement("p");
+    label.className = "name";
+    label.textContent = item.name;
+    card.append(label);
+    buildMapsList.append(card);
+  });
+}
+
+async function clearAttachedMaps() {
+  error.hidden = true;
+  const title = savedSelect.value || rememberedSaved();
+  if (!attachedMaps.length) {
+    return;
+  }
+  if (!title) {
+    attachedMaps = [];
+    paintBuildMaps();
+    return;
+  }
+  try {
+    const response = await fetch("/api/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: title, clearMaps: true }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || t("errClearMaps"));
+    }
+    savedRows = payload.rosters || [];
+    attachedMaps = [];
+    await loadSavedList();
+    if (savedRows.some((row) => row.name === title)) {
+      savedSelect.value = title;
+    }
+    paintBuildMaps();
+    refreshMapSavedList(title);
+  } catch (err) {
+    error.hidden = false;
+    error.textContent = err.message;
+  }
+}
+
 let savedRows = [];
 
 function emptyNote(text) {
@@ -219,7 +319,7 @@ function loadSavedList() {
     .then((response) => response.json())
     .then((payload) => {
       savedRows = payload.rosters || [];
-      const current = savedSelect.value;
+      const current = savedSelect.value || rememberedSaved();
       savedSelect.replaceChildren();
       const blank = document.createElement("option");
       blank.value = "";
@@ -265,6 +365,11 @@ async function saveCurrent() {
     savedRows = payload.rosters || [];
     await loadSavedList();
     savedSelect.value = title;
+    rememberSaved(title);
+    const row = savedRows.find((item) => item.name === title);
+    attachedMaps = row && row.maps ? [...row.maps] : attachedMaps;
+    paintBuildMaps();
+    refreshMapSavedList(title);
   } catch (err) {
     error.hidden = false;
     error.textContent = err.message;
@@ -277,96 +382,32 @@ async function loadSaved(title) {
     return;
   }
   await catalogReady;
+  await mapCatalogReady;
   const heroes = row.heroes.map((name) => catalog.find((hero) => hero.name === name)).filter(Boolean);
   const count = Math.min(40, Math.max(heroes.length, 2));
   sizeInput.value = String(count);
   slots = Array.from({ length: count }, (_, index) => heroes[index] || null);
+  attachedMaps = row.maps ? [...row.maps] : [];
   banned = new Set();
   loadedLock = true;
+  rememberSaved(title);
   clearOffers("up");
   clearOffers("down");
   render();
   score();
+  paintBuildMaps();
 }
 
 function resetBoard() {
   loadedLock = false;
   banned = new Set();
   slots = slots.map(() => null);
-  clearOffers("up");
-  clearOffers("down");
-  paintBuildRollLabel();
-  render();
-  score();
-}
-
-function draftSettings() {
-  return {
-    size: readSize() || 15,
-    bandLow: bandValue(bandLowInput, 45),
-    bandHigh: bandValue(bandHighInput, 55),
-    weightBelow: weightValue(weightBelowInput, 1),
-    weightAbove: weightValue(weightAboveInput, 1),
-    weightNone: weightValue(weightNoneInput, 0),
-    strongPairs: strongPairsOn.checked ? strongPairCount() : 0,
-    dropWeak: dropWeak.checked,
-    dropEvents: selectedEvents(),
-    dropUnknown: dropUnknown.checked,
-    dropLatest: dropLatest.checked,
-    latestSet: latestSet.checked,
-    draft: draftSelect.value,
-    source: statsSource(),
-    lang: getLang(),
-  };
-}
-
-function setDraftButtons(disabled) {
-  rollButton.disabled = disabled;
-  idealButton.disabled = disabled;
-}
-
-async function requestDraft(url, button, busyText) {
-  const previous = button.textContent;
-  error.hidden = true;
-  setDraftButtons(true);
-  if (busyText) {
-    button.textContent = busyText;
-  }
-  try {
-    await catalogReady;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draftSettings()),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || t("errRoll"));
-    }
-    applyDraft(payload);
-  } catch (err) {
-    error.hidden = false;
-    error.textContent = err.message;
-  } finally {
-    button.textContent = previous;
-    setDraftButtons(false);
-    paintBuildRollLabel();
-  }
-}
-
-function applyDraft(payload) {
-  const heroes = (payload.heroes || [])
-    .map((hero) => catalog.find((item) => item.name === hero.name))
-    .filter(Boolean);
-  const count = Math.min(40, Math.max(heroes.length, 2));
-  sizeInput.value = String(count);
-  slots = Array.from({ length: count }, (_, index) => heroes[index] || null);
-  banned = new Set();
-  loadedLock = false;
+  attachedMaps = [];
   clearOffers("up");
   clearOffers("down");
   render();
   score();
+  paintBuildMaps();
 }
 
 function addHero() {
@@ -408,7 +449,11 @@ async function deleteSaved() {
     }
     savedRows = payload.rosters || [];
     savedSelect.value = "";
+    rememberSaved("");
+    attachedMaps = [];
+    paintBuildMaps();
     await loadSavedList();
+    refreshMapSavedList();
   } catch (err) {
     error.hidden = false;
     error.textContent = err.message;
@@ -427,7 +472,6 @@ function buildSettings() {
     dropWeak: dropWeak.checked,
     dropEvents: selectedEvents(),
     dropUnknown: dropUnknown.checked,
-    dropLatest: dropLatest.checked,
     latestSet: latestSet.checked,
     lang: getLang(),
   };
@@ -541,7 +585,16 @@ function applyOffer(swap, direction) {
   offerSwaps(direction);
 }
 
+function sortSlots() {
+  const filled = slots.filter(Boolean).sort((left, right) =>
+    left.name.localeCompare(right.name, getLang() === "en" ? "en" : "ru", { sensitivity: "base" })
+  );
+  const empty = slots.length - filled.length;
+  slots = filled.concat(Array.from({ length: empty }, () => null));
+}
+
 function render() {
+  sortSlots();
   roster.replaceChildren();
   slots.forEach((hero, index) => {
     const item = document.createElement("li");
@@ -627,7 +680,7 @@ function eventLabel(events) {
 function syncFilters() {
   const full = slots.length > 0 && slots.every((slot) => slot);
   const locked = full || loadedLock;
-  [dropWeak, dropUnknown, dropLatest, latestSet, strongPairsOn].forEach((input) => {
+  [dropWeak, dropUnknown, latestSet, strongPairsOn].forEach((input) => {
     input.disabled = locked;
     const label = input.closest(".check");
     if (label) {
@@ -644,15 +697,54 @@ function syncFilters() {
   }
 }
 
+function placeHeroes(names, preferIndex) {
+  const seen = new Set(slots.filter(Boolean).map((hero) => hero.name));
+  for (const name of names) {
+    if (seen.has(name)) {
+      continue;
+    }
+    const hero = catalog.find((item) => item.name === name);
+    if (!hero) {
+      continue;
+    }
+    let index = -1;
+    if (
+      Number.isInteger(preferIndex)
+      && preferIndex >= 0
+      && preferIndex < slots.length
+      && !slots[preferIndex]
+    ) {
+      index = preferIndex;
+      preferIndex = -1;
+    } else {
+      index = slots.findIndex((slot) => !slot);
+    }
+    if (index < 0) {
+      if (slots.length >= 40) {
+        break;
+      }
+      sizeInput.value = String(slots.length + 1);
+      slots.push(null);
+      index = slots.length - 1;
+    }
+    slots[index] = hero;
+    seen.add(name);
+  }
+  render();
+  score();
+}
+
 function openSlot(index) {
   const current = slots[index];
   const taken = new Set(slots.filter(Boolean).map((hero) => hero.name));
   if (current) {
     taken.delete(current.name);
   }
+  const multi = !current;
   openChoose({
     title: current ? t("replaceNamed", { name: heroLabel(current) }) : t("chooseHero"),
     placeholder: t("searchHero"),
+    multi,
     choices: (needle) => catalog.filter((hero) => {
       if (taken.has(hero.name)) {
         return false;
@@ -675,6 +767,7 @@ function openSlot(index) {
       render();
       score();
     },
+    onPickMany: multi ? (names) => placeHeroes(names, index) : null,
     onClear: current ? () => {
       slots[index] = null;
       render();
@@ -799,9 +892,6 @@ function showBuildEdges(name) {
     }
     const row = buildView.duels[card.dataset.buildHero];
     const info = row ? row[column] : null;
-    if (info && info.games >= buildView.minGames && info.pct >= buildView.low && info.pct <= buildView.high) {
-      card.classList.add("is-in-band");
-    }
     shot.append(matchupEdge(info));
   }
 }
@@ -809,7 +899,6 @@ function showBuildEdges(name) {
 function clearBuildEdges() {
   for (const card of roster.querySelectorAll("[data-build-hero]")) {
     card.classList.remove("is-focus");
-    card.classList.remove("is-in-band");
     const edge = card.querySelector(".edge");
     if (edge) {
       edge.remove();
@@ -845,7 +934,6 @@ function matchupEdge(info) {
     edge.classList.add("none");
     return edge;
   }
-  edge.textContent = Math.round(info.pct) + "%";
   const reliable = info.games >= buildView.minGames;
   if (info.pct > buildView.line) {
     edge.classList.add("up");
@@ -857,6 +945,15 @@ function matchupEdge(info) {
   if (!reliable) {
     edge.classList.add("thin");
   }
+  if (reliable && info.pct > buildView.high) {
+    edge.append(verdictBadge("win"));
+  } else if (reliable && info.pct < buildView.low) {
+    edge.append(verdictBadge("lose"));
+  }
+  const pct = document.createElement("span");
+  pct.className = "pct-line";
+  pct.textContent = Math.round(info.pct) + "%";
+  edge.append(pct);
   edge.append(noteLine(info.games + " " + countWord(info.games, t("matchOne"), t("matchFew"), t("matchMany"))));
   if (!reliable) {
     edge.append(noteLine(t("fewGames"), "games tag"));
@@ -869,6 +966,14 @@ function matchupEdge(info) {
   }
   return edge;
 }
+
+function verdictBadge(kind) {
+  const badge = document.createElement("span");
+  badge.className = "verdict " + (kind === "win" ? "is-win" : "is-lose");
+  badge.textContent = kind === "win" ? t("winsMatchup") : t("losesMatchup");
+  return badge;
+}
+
 
 function pairStats(name) {
   let below = 0;
@@ -959,9 +1064,6 @@ function passesFilters(hero, taken) {
   if (dropWeak.checked && hero.weak) {
     return false;
   }
-  if (dropLatest.checked && hero.latest) {
-    return false;
-  }
   if (fromDroppedEvent(hero)) {
     return false;
   }
@@ -1032,7 +1134,6 @@ async function placePairs() {
         strongPairs: strongPairCount(),
         dropWeak: dropWeak.checked,
         dropEvents: selectedEvents(),
-        dropLatest: dropLatest.checked,
         dropUnknown: dropUnknown.checked,
         source: statsSource(),
         size: readSize() || 15,

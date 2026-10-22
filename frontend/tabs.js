@@ -58,10 +58,13 @@ export function applyTab() {
   unknownBoard.hidden = mode !== "unknown";
   placeRollButton("roll", "rollHome", "heroGateSlot", state.heroReady);
   placeRollButton("mapRoll", "mapRollHome", "mapGateSlot", state.mapReady);
-  placeEventFilter();
   const statsWrap = document.getElementById("statsSourceWrap");
   if (statsWrap) {
     statsWrap.hidden = mode === "maps";
+  }
+  const dropEventsOpen = document.getElementById("dropEventsOpen");
+  if (dropEventsOpen) {
+    dropEventsOpen.hidden = mode === "maps" || mode === "unknown";
   }
   const minGamesWrap = document.getElementById("minGamesWrap");
   if (minGamesWrap) {
@@ -71,20 +74,6 @@ export function applyTab() {
     paintUnknown();
   }
   paintCounted();
-}
-
-function placeEventFilter() {
-  const box = document.getElementById("dropEventsWrap");
-  const homes = {
-    heroes: document.getElementById("heroFilters"),
-    maps: document.getElementById("mapFilters"),
-    build: document.getElementById("buildFilters"),
-  };
-  const home = homes[state.mode];
-  if (!box || !home) {
-    return;
-  }
-  home.prepend(box);
 }
 
 function placeRollButton(buttonId, homeId, gateId, ready) {

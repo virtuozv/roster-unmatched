@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 from constants import DATA_DIR, MAP_IMAGE_DIR, MAP_OVERLAP, MAP_SIZE, MAPS_PATH, RECENT_FILES, drop_events_from
 from reasons import is_en
+from tournaments import event_matches
 
 
 def load_maps():
@@ -14,15 +15,18 @@ def load_maps():
     events = set()
     for row in rows:
         aliases = [part.strip() for part in row["Другие написания"].split(",") if part.strip()]
+        labels = []
         for event in row["Где была"].split(";"):
             event = event.strip()
             if event:
                 events.add(event)
+                labels.append(event)
         maps.append({
             "name": row["Официальное"],
             "aliases": aliases,
             "games": int(row["Игр"]),
             "rosters": int(row["Ростеров"]),
+            "recent": sorted(set(labels)),
         })
     maps.sort(key=lambda item: item["name"])
     attach_images(maps)
@@ -37,7 +41,7 @@ def attach_recent(maps):
         by_alias[item["name"].casefold()] = item["name"]
         for alias in item["aliases"]:
             by_alias[alias.casefold()] = item["name"]
-    recent = {item["name"]: set() for item in maps}
+    recent = {item["name"]: set(item.get("recent") or []) for item in maps}
     for label, filename in RECENT_FILES:
         path = os.path.join(DATA_DIR, filename)
         with open(path, encoding="utf-8") as handle:
@@ -86,9 +90,7 @@ def map_settings_from(payload, map_count):
 
 
 def map_avoided(item, events):
-    if not events:
-        return False
-    return bool(set(events).intersection(item.get("recent") or []))
+    return bool(event_matches(item.get("recent") or [], events))
 
 
 def roll_maps(data, settings, rng):
@@ -96,8 +98,8 @@ def roll_maps(data, settings, rng):
     overlap = min(settings["overlap"], size)
     events = settings.get("dropEvents") or []
     fresh = [item for item in data["maps"] if not map_avoided(item, events)]
-    once = [item for item in data["maps"] if map_avoided(item, events) and len(set(item["recent"]).intersection(events)) == 1]
-    both = [item for item in data["maps"] if map_avoided(item, events) and len(set(item["recent"]).intersection(events)) > 1]
+    once = [item for item in data["maps"] if len(event_matches(item.get("recent") or [], events)) == 1]
+    both = [item for item in data["maps"] if len(event_matches(item.get("recent") or [], events)) > 1]
     new_maps = [item for item in fresh if not item["image"]]
     known = [item for item in fresh if item["image"]]
     rng.shuffle(new_maps)
@@ -172,13 +174,16 @@ def finish_maps(data, roster, settings, note):
     )
 
     def card(item):
+        overlap = sorted(event_matches(item.get("recent") or [], events))
         return {
             "name": item["name"],
             "aliases": item["aliases"],
             "games": item["games"],
             "recent": item["recent"],
+            "overlapEvents": overlap,
             "image": item.get("image", ""),
-            "reason": recent_reason(item["recent"], lang) + ("" if item.get("image") else missing_art),
+            "reason": recent_reason(overlap if overlap else item["recent"], lang)
+            + ("" if item.get("image") else missing_art),
         }
 
     excluded = [card(item) for item in data["maps"] if map_avoided(item, events) and item["name"] not in chosen]

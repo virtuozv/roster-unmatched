@@ -7,12 +7,15 @@ const picker = document.getElementById("picker");
 const pickerTitle = document.getElementById("pickerTitle");
 const pickerSearch = document.getElementById("pickerSearch");
 const pickerList = document.getElementById("pickerList");
+const pickerAdd = document.getElementById("pickerAdd");
+const pickerClearAll = document.getElementById("pickerClearAll");
 const pickerClose = document.getElementById("pickerClose");
 
 let replaceName = null;
 let replaceMode = "hero";
 let actions = {};
 let choose = null;
+const selected = new Set();
 
 export function bindReplace(next) {
   actions = next;
@@ -36,17 +39,21 @@ export function closePicker() {
   picker.hidden = true;
   replaceName = null;
   choose = null;
+  selected.clear();
+  syncAddButton();
 }
 
 export function openChoose(options) {
   choose = options;
   replaceMode = "choose";
   replaceName = null;
+  selected.clear();
   closeMenu();
   pickerTitle.textContent = options.title;
   pickerSearch.placeholder = options.placeholder || t("searchHero");
   pickerSearch.value = "";
   renderPicker("");
+  syncAddButton();
   picker.hidden = false;
   pickerSearch.focus();
 }
@@ -55,8 +62,40 @@ export function replaceTarget() {
   return replaceName;
 }
 
+function multiChoose() {
+  return Boolean(choose && choose.multi && choose.onPickMany);
+}
+
+function syncAddButton() {
+  const multi = multiChoose();
+  if (pickerClearAll) {
+    pickerClearAll.hidden = !multi;
+    pickerClearAll.disabled = !multi || selected.size === 0;
+    pickerClearAll.textContent = t("clearAll");
+  }
+  if (pickerAdd) {
+    pickerAdd.hidden = !multi;
+    pickerAdd.disabled = !multi || selected.size === 0;
+    pickerAdd.textContent = multi && selected.size
+      ? t("add") + " (" + selected.size + ")"
+      : t("add");
+  }
+}
+
+function clearSelection() {
+  if (!multiChoose() || !selected.size) {
+    return;
+  }
+  selected.clear();
+  pickerList.querySelectorAll("button.is-selected").forEach((button) => {
+    button.classList.remove("is-selected");
+  });
+  syncAddButton();
+}
+
 function openPicker() {
   choose = null;
+  selected.clear();
   const ready = replaceMode === "map" ? actions.mapReady() : actions.heroReady();
   if (!ready || !replaceName) {
     return;
@@ -68,8 +107,19 @@ function openPicker() {
   pickerSearch.placeholder = replaceMode === "map" ? t("searchMap") : t("searchHero");
   pickerSearch.value = "";
   renderPicker("");
+  syncAddButton();
   picker.hidden = false;
   pickerSearch.focus();
+}
+
+function commitSelection() {
+  if (!multiChoose() || !selected.size) {
+    return;
+  }
+  const names = [...selected];
+  const pickMany = choose.onPickMany;
+  closePicker();
+  pickMany(names);
 }
 
 function renderPicker(query) {
@@ -89,20 +139,37 @@ function renderPicker(query) {
       });
       pickerList.append(clear);
     }
+    const multi = multiChoose();
     for (const hero of choose.choices(needle)) {
       const button = document.createElement("button");
       button.type = "button";
+      button.dataset.name = hero.name;
       button.append(choose.shot(hero));
       const label = document.createElement("span");
       label.textContent = heroLabel(hero);
       button.append(label);
+      if (multi && selected.has(hero.name)) {
+        button.classList.add("is-selected");
+      }
       button.addEventListener("click", () => {
+        if (multi) {
+          if (selected.has(hero.name)) {
+            selected.delete(hero.name);
+            button.classList.remove("is-selected");
+          } else {
+            selected.add(hero.name);
+            button.classList.add("is-selected");
+          }
+          syncAddButton();
+          return;
+        }
         const pick = choose.onPick;
         closePicker();
         pick(hero.name);
       });
       pickerList.append(button);
     }
+    syncAddButton();
     return;
   }
   if (replaceMode === "map") {
@@ -143,6 +210,8 @@ menuReplace.addEventListener("click", (event) => {
 });
 
 pickerClose.addEventListener("click", closePicker);
+pickerClearAll.addEventListener("click", clearSelection);
+pickerAdd.addEventListener("click", commitSelection);
 
 picker.addEventListener("click", (event) => {
   if (event.target === picker) {
@@ -159,6 +228,10 @@ document.addEventListener("keydown", (event) => {
     closeMenu();
     closePicker();
   }
+  if (event.key === "Enter" && !picker.hidden && multiChoose() && selected.size) {
+    event.preventDefault();
+    commitSelection();
+  }
 });
 
 onLangChange(() => {
@@ -173,4 +246,5 @@ onLangChange(() => {
     pickerSearch.placeholder = replaceMode === "map" ? t("searchMap") : t("searchHero");
     renderPicker(pickerSearch.value);
   }
+  syncAddButton();
 });

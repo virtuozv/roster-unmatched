@@ -83,10 +83,9 @@ def apply_swap(roster, remove, add):
 
 
 def event_blocked(hero, settings):
-    wanted = set(settings.get("dropEvents") or [])
-    if not wanted:
-        return False
-    return bool(wanted.intersection(hero.get("recent") or []))
+    from tournaments import event_matches
+
+    return bool(event_matches(hero.get("recent") or [], settings.get("dropEvents") or []))
 
 
 def dropped_event_heroes(data, settings):

@@ -5,6 +5,7 @@ import re
 from urllib.parse import quote
 
 from constants import DATA_DIR, IMAGE_DIR, IMAGE_OVERRIDES, RECENT_FILES, ROSTER_PATH, STATS_FILES, STATS_PATH
+from tournaments import load_document_recent
 
 
 def short_code(character):
@@ -101,6 +102,8 @@ def load_data(stats_path=None):
             name = by_alias.get(str(token).strip().lower())
             if name:
                 recent[name].add(label)
+    for name, labels in load_document_recent(by_alias).items():
+        recent.setdefault(name, set()).update(labels)
 
     wins = {}
     totals = {}

@@ -10,9 +10,12 @@ const mapOverlapInput = document.getElementById("mapOverlap");
 const mapRoster = document.getElementById("mapRoster");
 const mapExcluded = document.getElementById("mapExcluded");
 const mapNote = document.getElementById("mapNote");
+const mapSavedSelect = document.getElementById("mapSavedRosters");
+const mapAttachButton = document.getElementById("mapAttachRoster");
 const error = document.getElementById("error");
 
 let mapPayload = null;
+let mapSavedRows = [];
 
 export function hasMapRoster() {
   return !!mapPayload;
@@ -74,9 +77,83 @@ export function startMaps() {
       paintMapRollLabel();
     }
   });
+  if (mapAttachButton) {
+    mapAttachButton.addEventListener("click", attachMapsToSaved);
+  }
+  loadMapSavedList();
   onLangChange(() => {
     paintMapRollLabel();
   });
+}
+
+export function refreshMapSavedList(selectName) {
+  return loadMapSavedList().then(() => {
+    if (selectName && mapSavedSelect) {
+      mapSavedSelect.value = selectName;
+    }
+  });
+}
+
+function loadMapSavedList() {
+  if (!mapSavedSelect) {
+    return Promise.resolve();
+  }
+  return fetch("/api/saved")
+    .then((response) => response.json())
+    .then((payload) => {
+      mapSavedRows = payload.rosters || [];
+      const current = mapSavedSelect.value;
+      mapSavedSelect.replaceChildren();
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "—";
+      mapSavedSelect.append(blank);
+      mapSavedRows.forEach((row) => {
+        const option = document.createElement("option");
+        option.value = row.name;
+        option.textContent = row.name;
+        mapSavedSelect.append(option);
+      });
+      if (mapSavedRows.some((row) => row.name === current)) {
+        mapSavedSelect.value = current;
+      }
+    })
+    .catch(() => {});
+}
+
+async function attachMapsToSaved() {
+  error.hidden = true;
+  const title = mapSavedSelect ? mapSavedSelect.value : "";
+  if (!title) {
+    error.hidden = false;
+    error.textContent = t("pickSavedFirst");
+    return;
+  }
+  const names = (mapPayload && mapPayload.maps || []).map((item) => item.name);
+  if (!names.length) {
+    error.hidden = false;
+    error.textContent = t("needMapRoster");
+    return;
+  }
+  try {
+    const response = await fetch("/api/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: title, maps: names, attachMaps: true }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error || t("errAttachMaps"));
+    }
+    mapSavedRows = payload.rosters || [];
+    await loadMapSavedList();
+    mapSavedSelect.value = title;
+    const { syncSavedRosters } = await import("./build.js");
+    await syncSavedRosters(title);
+  } catch (err) {
+    error.hidden = false;
+    error.textContent = err.message;
+  }
 }
 
 function paintMapRollLabel() {
@@ -166,17 +243,21 @@ export function boardShot(item) {
 
 function mapCard(item, clickable) {
   const card = document.createElement("li");
-  if (clickable && item.recent && item.recent.length) {
+  const overlaps = item.overlapEvents || [];
+  if (clickable && overlaps.length) {
     card.classList.add("is-repeat");
   }
   card.append(boardShot(item));
   const name = document.createElement("p");
   name.className = "name";
   name.textContent = item.name;
-  const why = document.createElement("p");
-  why.className = "why";
-  why.textContent = item.reason;
-  card.append(name, why);
+  card.append(name);
+  if (clickable && overlaps.length) {
+    const events = document.createElement("p");
+    events.className = "map-overlap";
+    events.textContent = overlaps.join(" · ");
+    card.append(events);
+  }
   if (clickable) {
     card.addEventListener("click", (event) => {
       event.stopPropagation();

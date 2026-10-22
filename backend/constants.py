@@ -10,7 +10,8 @@ STATS_FILES = {
     "umleague": os.path.join(ROOT, "documents", "процент-побед-unmatched-club.csv"),
 }
 STATS_PATH = STATS_FILES["all"]
-SAVED_PATH = os.path.join(ROOT, "documents", "сохранённые-ростеры.csv")
+DOCUMENTS_DIR = os.path.join(ROOT, "documents")
+SAVED_PATH = os.path.join(DOCUMENTS_DIR, "сохранённые-ростеры.csv")
 ROSTER_PATH = os.path.join(DATA_DIR, "roster.json")
 MAPS_PATH = os.path.join(DATA_DIR, "maps.csv")
 IMAGE_DIR = os.path.join(ROOT, "images", "portraits")
@@ -22,10 +23,23 @@ RECENT_FILES = [
     ("Weekcup", "Weekcup7.json"),
 ]
 RECENT_EVENTS = tuple(label for label, _filename in RECENT_FILES)
+SKIP_LOG_NAMES = {"текущее положение.csv"}
+
+
+def document_tournaments():
+    if not os.path.isdir(DOCUMENTS_DIR):
+        return []
+    names = []
+    for name in os.listdir(DOCUMENTS_DIR):
+        path = os.path.join(DOCUMENTS_DIR, name)
+        if os.path.isdir(path):
+            names.append(name)
+    names.sort(key=lambda item: item.casefold())
+    return names
 
 
 def drop_events_from(payload):
-    allowed = set(RECENT_EVENTS)
+    allowed = set(RECENT_EVENTS) | set(document_tournaments())
     events = payload.get("dropEvents") if isinstance(payload, dict) else None
     chosen = []
     if isinstance(events, list):
