@@ -824,7 +824,7 @@ def suggest_swaps(data, names, settings, limit=8):
             roster.append(name)
     if len(roster) < 2:
         return []
-    base = roster_ideal(data, roster, settings)
+    base = round(roster_ideal(data, roster, settings), 1)
     pool = []
     for hero in list(data["heroes"]) + list(data.get("unplayed") or []):
         name = hero["name"]
@@ -850,7 +850,7 @@ def suggest_swaps(data, names, settings, limit=8):
             add = hero["name"]
             if settings.get("dropUnknown") and not played_all(data, add, others):
                 continue
-            value = roster_ideal(data, others + [add], settings)
+            value = round(roster_ideal(data, others + [add], settings), 1)
             gain = round(value - base, 1)
             downward = settings.get("direction") == "down"
             if downward:
@@ -865,7 +865,8 @@ def suggest_swaps(data, names, settings, limit=8):
                 top = {
                     "remove": remove,
                     "add": add,
-                    "ideal": round(value, 1),
+                    "base": base,
+                    "ideal": value,
                     "gain": gain,
                     "removeImage": hero_by_name[remove].get("image") or "",
                     "addImage": hero.get("image") or "",

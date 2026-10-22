@@ -202,13 +202,16 @@ def check_swaps(data):
     swaps = suggest_swaps(data, names, settings)
     if not swaps:
         raise SystemExit("Для слабого состава не нашлось замены")
-    base = roster_ideal(data, names, settings)
+    base = round(roster_ideal(data, names, settings), 1)
     for swap in swaps:
         if swap["gain"] >= 0 or swap["remove"] not in names or swap["add"] in names:
             raise SystemExit("Замена не снижает SCORE")
         trial = [name for name in names if name != swap["remove"]] + [swap["add"]]
-        if round(roster_ideal(data, trial, settings), 1) != swap["ideal"] or swap["ideal"] >= round(base, 1):
+        actual = round(roster_ideal(data, trial, settings), 1)
+        if actual != swap["ideal"] or swap["ideal"] >= base or swap["gain"] != round(actual - base, 1):
             raise SystemExit("SCORE после замены посчитан неверно")
+        if swap.get("base") != base:
+            raise SystemExit("База SCORE в замене не совпала")
     locked = suggest_swaps(data, names + ["Хеллбой"], settings_from({"latestSet": True}))
     if any(swap["remove"] == "Хеллбой" for swap in locked):
         raise SystemExit("Последний набор предложили заменить")
@@ -217,8 +220,9 @@ def check_swaps(data):
     if any(swap["add"] in recent for swap in quiet):
         raise SystemExit("Замена взяла героя из последних турниров")
     lowered = suggest_swaps(data, names, settings_from({"direction": "down"}))
-    if not lowered or any(swap["gain"] <= 0 or swap["ideal"] <= round(base, 1) for swap in lowered):
+    if not lowered or any(swap["gain"] <= 0 or swap["ideal"] <= base for swap in lowered):
         raise SystemExit("Замена не поднимает SCORE")
+
 
 
 def check_saved(data):

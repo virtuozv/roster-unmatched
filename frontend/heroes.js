@@ -325,7 +325,12 @@ function paintHeroSwaps(box, swaps, direction) {
     const gain = document.createElement("span");
     gain.className = "gain";
     const value = Number(swap.gain);
-    gain.textContent = (value < 0 ? "−" : "+") + Math.abs(value).toFixed(1).replace(".", ",");
+    const next = Number(swap.ideal);
+    const from = Number.isFinite(Number(swap.base)) ? Number(swap.base) : next - value;
+    gain.textContent = formatScore(from) + " → " + formatScore(next);
+    gain.title = "SCORE "
+      + (value < 0 ? "−" : "+")
+      + Math.abs(value).toFixed(1).replace(".", ",");
     gain.classList.toggle("is-down", value > 0);
     button.append(text, portrait(swap.addImage, swap.add), gain);
     button.addEventListener("click", () => applyHeroOffer(swap, direction));
