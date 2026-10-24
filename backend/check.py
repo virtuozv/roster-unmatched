@@ -17,20 +17,24 @@ def check():
     sources = load_sources()
     data = sources["all"]
     club = sources["umleague"]
-    achilles = club["wins"][("Ахиллес", "Мисс Марвел")]
-    marvel = club["wins"][("Мисс Марвел", "Ахиллес")]
-    if achilles["wins"] != 6 or achilles["losses"] != 0 or marvel["wins"] != 0 or marvel["losses"] != 6:
-        raise SystemExit("UmLeague: Ахиллес — Мисс Марвел прочитан неверно")
+    sample = next(iter(club["wins"].items()), None)
+    if not sample:
+        raise SystemExit("UmLeague: нет матчапов")
+    (hero, opponent), info = sample
+    reverse = club["wins"].get((opponent, hero))
+    if not reverse or reverse["wins"] != info["losses"] or reverse["losses"] != info["wins"]:
+        raise SystemExit("UmLeague: обратный матчап не сходится")
     club_games = sum(hero["games"] for hero in club["heroes"])
     if club["matches"] != club_games // 2 or club_games % 2:
         raise SystemExit("UmLeague: число учтённых матчей не сходится")
     if data["matches"] != sources["saskia"]["matches"] + club["matches"]:
         raise SystemExit("Общий процент не равен сумме Саскии и UmLeague")
-    info = data["wins"][("Сунь Укун", "Ахиллес")]
-    saskia = sources["saskia"]["wins"].get(("Сунь Укун", "Ахиллес"), {"wins": 0, "losses": 0})
-    club_pair = club["wins"].get(("Сунь Укун", "Ахиллес"), {"wins": 0, "losses": 0})
-    if info["wins"] != saskia["wins"] + club_pair["wins"] or info["losses"] != saskia["losses"] + club_pair["losses"]:
-        raise SystemExit("Матчап Сунь Укун — Ахиллес не сложился из Саскии и UmLeague")
+    info = data["wins"].get(("Сунь Укун", "Ахиллес"))
+    if info:
+        saskia = sources["saskia"]["wins"].get(("Сунь Укун", "Ахиллес"), {"wins": 0, "losses": 0})
+        club_pair = club["wins"].get(("Сунь Укун", "Ахиллес"), {"wins": 0, "losses": 0})
+        if info["wins"] != saskia["wins"] + club_pair["wins"] or info["losses"] != saskia["losses"] + club_pair["losses"]:
+            raise SystemExit("Матчап Сунь Укун — Ахиллес не сложился из Саскии и UmLeague")
     settings = settings_from({})
     result = roll(data, settings, random.Random(3))
     if len(result["heroes"]) != 15 or len(result["pool"]) != 20:

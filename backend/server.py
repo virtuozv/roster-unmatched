@@ -16,7 +16,7 @@ def main():
     AppHandler.data = AppHandler.sources["all"]
     AppHandler.maps = load_maps()
     server = ThreadingHTTPServer((HOST, PORT), AppHandler)
-    print("Ростер: http://" + HOST + ":" + str(PORT))
+    print("Matchdraft: http://" + HOST + ":" + str(PORT))
     server.serve_forever()
 
 

@@ -4,6 +4,7 @@ import { boardShot, hasMapRoster, mapChoices, replaceMap, startMaps } from "./ma
 import { hasHeroRoster, heroChoices, portrait, refreshShownRoster, replaceHero, startHeroes } from "./heroes.js";
 import { onLangChange, startI18n } from "./i18n.js";
 import { bindReplace } from "./picker.js";
+import { startRefreshStats } from "./refresh.js";
 import { state } from "./state.js";
 import { applyTab, paintCounted, startTabs } from "./tabs.js";
 import { startUnknown } from "./unknown.js";
@@ -23,6 +24,7 @@ startHeroes();
 startMaps();
 startBuild();
 startUnknown();
+startRefreshStats();
 startTabs();
 onLangChange(() => {
   applyTab();

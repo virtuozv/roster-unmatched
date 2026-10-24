@@ -1,6 +1,6 @@
 const STRINGS = {
   ru: {
-    titleDoc: "Ростер",
+    titleDoc: "Matchdraft",
     tabBuild: "Конструктор",
     tabHeroes: "Драфт героев",
     tabMaps: "Драфт карт",
@@ -9,6 +9,9 @@ const STRINGS = {
     stats: "Статистика",
     statsAll: "Всего",
     statsSaskia: "Саския",
+    refreshStats: "Обновить статистику",
+    refreshStatsError: "Не удалось обновить статистику",
+    refreshStatsBusy: "Обновление уже идёт",
     minGames: "Матчей до",
     dropEvents: "Исключить турниры",
     noTournaments: "Турниры в documents не найдены",
@@ -177,7 +180,7 @@ const STRINGS = {
     errUpdate: "Не удалось обновить ростер",
   },
   en: {
-    titleDoc: "Roster",
+    titleDoc: "Matchdraft",
     tabBuild: "Builder",
     tabHeroes: "Hero draft",
     tabMaps: "Map draft",
@@ -186,6 +189,9 @@ const STRINGS = {
     stats: "Stats",
     statsAll: "Combined",
     statsSaskia: "Saskia",
+    refreshStats: "Refresh stats",
+    refreshStatsError: "Could not refresh stats",
+    refreshStatsBusy: "Refresh already running",
     minGames: "Matches up to",
     dropEvents: "Exclude events",
     noTournaments: "No tournaments found in documents",

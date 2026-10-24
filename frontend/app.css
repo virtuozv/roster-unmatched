@@ -328,6 +328,55 @@ button { font: inherit; }
   justify-content: flex-end;
 }
 
+.stats-refresh {
+  align-self: end;
+  display: grid;
+  gap: 4px;
+  min-width: min(220px, 100%);
+}
+
+.stats-refresh[hidden] {
+  display: none;
+}
+
+.stats-refresh progress {
+  width: 100%;
+  height: 8px;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--raise);
+}
+
+.stats-refresh progress::-webkit-progress-bar {
+  background: var(--raise);
+  border-radius: 999px;
+}
+
+.stats-refresh progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.stats-refresh progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.stats-refresh-label {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#refreshStats:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 #statsSourceWrap[hidden] {
   display: none;
 }

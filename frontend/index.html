@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ростер</title>
+  <title>Matchdraft</title>
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
@@ -216,6 +216,11 @@
           <option value="umleague">UmLeague</option>
         </select>
       </label>
+      <button id="refreshStats" class="event-exclude-btn" type="button" data-i18n="refreshStats">Обновить статистику</button>
+      <div id="refreshStatsProgress" class="stats-refresh" hidden>
+        <progress id="refreshStatsBar" max="100" value="0"></progress>
+        <span id="refreshStatsLabel" class="stats-refresh-label"></span>
+      </div>
       <button id="dropEventsOpen" class="event-exclude-btn" type="button">
         <span data-i18n="dropEvents">Исключить турниры</span>
         <span id="dropEventsCount" class="event-exclude-count" hidden></span>

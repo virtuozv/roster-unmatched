@@ -10,6 +10,7 @@ from balance import list_unknown_heroes
 from roster import hero_catalog, rescore, roll, roll_above, score_roster, settings_from, suggest_strong_pairs, suggest_swaps, swap
 from saved import attach_maps, clear_maps, delete_roster, load_saved, store_roster
 from tournaments import list_tournaments
+import stats_refresh
 
 
 class AppHandler(BaseHTTPRequestHandler):
@@ -86,6 +87,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 "recent": list(RECENT_EVENTS),
             })
             return
+        if path == "/api/stats/refresh":
+            self.respond(200, stats_refresh.status())
+            return
         if path.startswith("/api/"):
             self.respond(404, {"error": "Не найдено"})
             return
@@ -144,6 +148,14 @@ class AppHandler(BaseHTTPRequestHandler):
                 self.respond(400, {"error": str(error)})
                 return
             self.respond(200, {"rosters": rosters})
+            return
+        if self.path == "/api/stats/refresh":
+            def reload_sources(sources):
+                AppHandler.sources = sources
+                AppHandler.data = sources.get("all") or AppHandler.data
+
+            started, state = stats_refresh.start(on_reload=reload_sources)
+            self.respond(200 if started else 409, state)
             return
         settings = settings_from(payload)
         data = self.data_for(payload.get("source"))

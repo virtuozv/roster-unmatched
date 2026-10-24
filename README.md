@@ -1,4 +1,4 @@
-# Ростер Unmatched
+# Matchdraft
 
 Локальная страница собирает драфт героев и драфт карт по статистике турниров. Сервер отдаёт страницу и считает составы. База и вход не нужны.
 
@@ -50,9 +50,13 @@ python backend/server.py
 
 ## Откуда цифры
 
+Стата только с [the-unmatched.club](https://www.the-unmatched.club/tools/matchups): **UmLeague** ← Tabletop League, **Саския** ← UnmatchedRU, **Всего** ← сумма. tabletopleague.com не используется.
+
+Обновление: кнопка **Обновить статистику** или `python backend/club_winrate.py`.
+
 - `documents/процент-побед.csv` — Саския
 - `documents/процент-побед-unmatched-club.csv` — UmLeague
-- `documents/общий-процент-побед.csv` — Всего, сумма двух файлов
+- `documents/общий-процент-побед.csv` — Всего
 - `backend/data/roster.json` — имена и псевдонимы
 - `backend/data/LastChance.json`, `FirstChance.json`, `Weekcup7.json` — последние турниры
 - `backend/data/maps.csv` — карты
